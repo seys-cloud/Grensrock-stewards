@@ -1,0 +1,840 @@
+
+let D={teams:[],posts:[],timetable:{friday:[],saturday:[]}};
+let S=null;
+let activeDay='friday',activeView='post',filterType='all',filterVal=null,statSort='alpha';
+let drag=null,modalMode=null,modalId=null,modalDay=null;
+let darkMode=true;
+
+const TPAL=['#c8101e','#e88c00','#4fc3f7','#66bb6a','#e040fb','#ff8a65','#26c6da','#aed581','#ef5350','#42a5f5','#ffca28','#26a69a','#ec407a','#7e57c2','#4caf6e','#ffa726','#29b6f6','#cddc39','#ff7043','#5c6bc0','#4dd0e1','#f06292','#8d6e63','#78909c','#a5d6a7'];
+const PPAL=['#c8101e','#e88c00','#4fc3f7','#4caf6e','#ff4d6d','#b967ff','#00e5a0','#ff9f43','#26c6da','#f06292','#cddc39','#ffd740','#e57373'];
+const LS_POSTS='gr_posts_v2',LS_TT='gr_timetable_v2';
+
+/* ===== Supabase online opslag (Grensrock steward planner) ===== */
+const SB_URL='https://xsavpdiupaxikzuqesul.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzYXZwZGl1cGF4aWt6dXFlc3VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1ODg3OTUsImV4cCI6MjA5NjE2NDc5NX0.Poi3JG8WMmrwJKXIZ1SMq8Omc3RBqLD03GpUUZdcLmQ';
+const SB_ROW_ID=1;
+let sb=null, editMode=false, userEmail='', _saveTimer=null, _applyingRemote=false;
+try{ sb=window.supabase.createClient(SB_URL,SB_KEY); }catch(e){ console.warn('Supabase init faalde',e); }
+function currentState(){ return {teams:D.teams,posts:D.posts,timetable:D.timetable,schedule:S}; }
+function applyState(data){ if(!data) return false; let ch=false;
+  if(Array.isArray(data.teams)){ D.teams=data.teams; ch=true; }
+  if(Array.isArray(data.posts)){ D.posts=data.posts; ch=true; }
+  if(data.timetable){ D.timetable=data.timetable; ch=true; }
+  if(data.schedule){ S=data.schedule; } return ch; }
+function requireEdit(){ if(!editMode){ toast('🔒 Log in om te bewerken','info'); return false; } return true; }
+function scheduleCloudSave(){ if(!editMode||!sb||_applyingRemote) return; clearTimeout(_saveTimer); _saveTimer=setTimeout(cloudSaveNow,800); }
+async function cloudSaveNow(){ if(!editMode||!sb) return;
+  try{ const {error}=await sb.from('stewards_planner').update({data:currentState(),updated_at:new Date().toISOString(),updated_by:userEmail}).eq('id',SB_ROW_ID);
+    if(error) throw error; setSyncBadge('✅ opgeslagen'); }
+  catch(e){ console.warn('save error',e); setSyncBadge('⚠️ niet opgeslagen'); } }
+async function cloudLoad(){ if(!sb) return null;
+  try{ const {data,error}=await sb.from('stewards_planner').select('data').eq('id',SB_ROW_ID).single();
+    if(error) throw error; return data?data.data:null; }
+  catch(e){ console.warn('load error',e); return null; } }
+function renderEverything(){ renderTimetableInvoer(); renderInputTables();
+  if(S){ renderStats(); renderSchedView(); renderValidation();
+    ['btn-xls','btn-pdf','btn-regen','btn-publish'].forEach(id=>{const el=document.getElementById(id); if(el) el.style.display='';}); } }
+function subscribeRealtime(){ if(!sb) return;
+  sb.channel('stewards_planner_rt').on('postgres_changes',{event:'UPDATE',schema:'public',table:'stewards_planner'},payload=>{
+    if(editMode) return; _applyingRemote=true;
+    try{ applyState(payload.new&&payload.new.data); renderEverything(); setSyncBadge('🔄 bijgewerkt'); }
+    finally{ _applyingRemote=false; } }).subscribe(); }
+function setSyncBadge(t){ const b=document.getElementById('sync-badge'); if(b) b.textContent=t; }
+function setEditUI(){ const btn=document.getElementById('login-btn'), banner=document.getElementById('ro-banner');
+  if(btn) btn.textContent=editMode?('🔓 '+userEmail+' — uitloggen'):'🔒 Inloggen om te bewerken';
+  if(banner) banner.style.display=editMode?'none':''; }
+async function doLoginToggle(){ if(!sb){ toast('Supabase niet geladen','err'); return; }
+  if(editMode){ await sb.auth.signOut(); return; }
+  const email=prompt('E-mail (Supabase login):'); if(!email) return;
+  const password=prompt('Wachtwoord:'); if(!password) return;
+  const {error}=await sb.auth.signInWithPassword({email:email.trim(),password});
+  if(error){ toast('❌ Login mislukt: '+error.message,'err'); return; } }
+function mountLoginBar(){
+  const bar=document.createElement('div');
+  bar.style.cssText='position:fixed;top:8px;right:10px;z-index:9999;display:flex;gap:8px;align-items:center;font:600 12px/1 Barlow Condensed,sans-serif';
+  bar.innerHTML='<span id="sync-badge" style="color:var(--text-dim,#999)"></span><button id="login-btn" onclick="doLoginToggle()" style="cursor:pointer;padding:6px 10px;border-radius:8px;border:1px solid var(--gold,#f5c400);background:transparent;color:var(--gold,#f5c400);font:inherit">🔒 Inloggen</button>';
+  document.body.appendChild(bar);
+  const banner=document.createElement('div'); banner.id='ro-banner';
+  banner.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9998;background:rgba(17,17,17,.85);backdrop-filter:blur(4px);color:#fff;text-align:center;padding:7px;font:600 12px Barlow Condensed,sans-serif;border-top:1px solid #f5c40055';
+  banner.textContent='👁️ Alleen-lezen weergave — log in om te bewerken';
+  document.body.appendChild(banner); }
+/* ===== einde Supabase blok ===== */
+
+
+const tc=id=>{const i=D.teams.findIndex(t=>t.id===id);return TPAL[i%TPAL.length]||'#888';};
+const pc=id=>{const i=D.posts.findIndex(p=>p.id===id);return PPAL[i%PPAL.length]||'#888';};
+const fh=h=>{const n=((h%24)+24)%24;return String(n).padStart(2,'0')+':00';};
+const fm=(h,m)=>{const n=((h%24)+24)%24;return String(n).padStart(2,'0')+':'+String(m||0).padStart(2,'0');};
+const isPM=h=>h>=24;
+const isMidnightCol=h=>h===24;
+const isOpkuis=p=>p.name.toLowerCase().includes('opkuis');
+
+function resolveHour(val,day,type){
+  if(val==='begin'){const hrs=D.posts.flatMap(p=>p.schedule[day]?[p.schedule[day].from]:[]);return hrs.length?Math.min(...hrs):0;}
+  if(val==='einde'){const hrs=D.posts.flatMap(p=>p.schedule[day]?[p.schedule[day].to]:[]);return hrs.length?Math.max(...hrs):30;}
+  const n=parseInt(val);return isNaN(n)?type==='from'?0:30:n;
+}
+function getAv(team,day){const av=team.availability[day];if(!av)return null;return{from:resolveHour(av.from,day,'from'),to:resolveHour(av.to,day,'to')};}
+function isAvail(team,day,hour){const av=getAv(team,day);return av&&hour>=av.from&&hour<av.to;}
+const avStr=a=>{
+  if(!a)return'<span style="color:var(--text-muted)">—</span>';
+  const fv=a.from==='begin'?'<span style="color:var(--green)">begin</span>':fh(parseInt(a.from)||0);
+  const tv=a.to==='einde'?'<span style="color:var(--green)">einde</span>':`${fh(parseInt(a.to)||0)}${parseInt(a.to)>=24?'<sup style="color:var(--gold);font-size:8px">+1</sup>':''}`;
+  return`${fv}&ndash;${tv}`;
+};
+
+function toggleTheme(){darkMode=!darkMode;document.body.classList.toggle('light',!darkMode);document.getElementById('theme-btn').textContent=darkMode?'🌙':'☀️';}
+
+function goTab(t){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('sec-'+t).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(b=>{if(b.getAttribute('onclick')===`goTab('${t}')`)b.classList.add('active');});
+  if(t==='rooster'&&S){renderStats();renderSchedView();}
+}
+function switchDay(d){activeDay=d;document.getElementById('dt-fri').classList.toggle('active',d==='friday');document.getElementById('dt-sat').classList.toggle('active',d==='saturday');document.getElementById('stats-day-label').textContent=d==='friday'?'Vrijdag':'Zaterdag';renderStats();renderSchedView();}
+function switchView(v){activeView=v;document.getElementById('vt-post').classList.toggle('active',v==='post');document.getElementById('vt-team').classList.toggle('active',v==='team');renderSchedView();}
+function setSortMode(m){statSort=m;document.getElementById('sort-az').classList.toggle('btn-on',m==='alpha');document.getElementById('sort-cnt').classList.toggle('btn-on',m==='count');renderStats();if(activeView==='team')renderSchedView();}
+
+function savePersistent(){try{localStorage.setItem(LS_POSTS,JSON.stringify(D.posts));localStorage.setItem(LS_TT,JSON.stringify(D.timetable));}catch(e){}scheduleCloudSave();}
+function loadPersistent(){try{const p=localStorage.getItem(LS_POSTS),tt=localStorage.getItem(LS_TT);if(p)D.posts=JSON.parse(p);if(tt)D.timetable=JSON.parse(tt);return p||tt;}catch(e){return false;}}
+
+function initDefaultPostsAndTimetable(){
+  const bn=(av,s)=>parseNeedStr(s,av);
+  D.posts=[
+    {id:'P0',name:'Ingang',schedule:{friday:{from:18,to:26},saturday:{from:12,to:26}},needPerHour:{friday:bn({from:18,to:26},'18:1,21:2,24:1'),saturday:bn({from:12,to:26},'12:1,16:2,22:2,25:1')}},
+    {id:'P1',name:'Uitgang',schedule:{friday:{from:18,to:26},saturday:{from:12,to:26}},needPerHour:{friday:bn({from:18,to:26},'18:1,21:2,24:1'),saturday:bn({from:12,to:26},'12:1,16:2,22:2,25:1')}},
+    {id:'P2',name:'VIP',schedule:{friday:{from:20,to:26},saturday:{from:14,to:26}},needPerHour:{friday:bn({from:20,to:26},'20:1,22:2'),saturday:bn({from:14,to:26},'14:1,19:2')}},
+    {id:'P3',name:'Kleedkamers artiesten',schedule:{friday:{from:18,to:26},saturday:{from:12,to:26}},needPerHour:{friday:bn({from:18,to:26},'18:1'),saturday:bn({from:12,to:26},'12:1')}},
+    {id:'P4',name:'Ingang backstage',schedule:{friday:{from:18,to:26},saturday:{from:12,to:26}},needPerHour:{friday:bn({from:18,to:26},'18:1'),saturday:bn({from:12,to:26},'12:1')}},
+    {id:'P5',name:'Nooduitgang rechts',schedule:{friday:{from:18,to:26},saturday:{from:12,to:26}},needPerHour:{friday:bn({from:18,to:26},'18:1'),saturday:bn({from:12,to:26},'12:1')}},
+    {id:'P6',name:'Vestingsmuur',schedule:{friday:{from:18,to:26},saturday:{from:12,to:26}},needPerHour:{friday:bn({from:18,to:26},'18:1,21:2'),saturday:bn({from:12,to:26},'12:1,17:2')}},
+    {id:'P7',name:'Frontstage',schedule:{friday:{from:18,to:26},saturday:{from:12,to:26}},needPerHour:{friday:bn({from:18,to:26},'18:1,21:2,24:1'),saturday:bn({from:12,to:26},'12:1,17:2,24:1')}},
+    {id:'P8',name:'Nooduitgang links',schedule:{friday:{from:18,to:26},saturday:{from:12,to:26}},needPerHour:{friday:bn({from:18,to:26},'18:1'),saturday:bn({from:12,to:26},'12:1')}},
+    {id:'P9',name:'Ingang medewerkers',schedule:{friday:{from:16,to:22},saturday:{from:10,to:20}},needPerHour:{friday:bn({from:16,to:22},'16:1'),saturday:bn({from:10,to:20},'10:1')}},
+    {id:'P10',name:'Ingang materiaal artiesten',schedule:{friday:{from:14,to:20},saturday:{from:10,to:18}},needPerHour:{friday:bn({from:14,to:20},'14:1'),saturday:bn({from:10,to:18},'10:1')}},
+    {id:'P11',name:'Festivalterrein',schedule:{friday:{from:18,to:26},saturday:{from:12,to:26}},needPerHour:{friday:bn({from:18,to:26},'18:1,20:2,23:1'),saturday:bn({from:12,to:26},'12:1,16:2,22:1')}},
+    {id:'P12',name:'Opkuis terrein',schedule:{friday:{from:26,to:27},saturday:{from:26,to:27}},needPerHour:{friday:bn({from:26,to:27},'26:25'),saturday:bn({from:26,to:27},'26:25')}},
+  ];
+  D.timetable={
+    friday:[{id:'AF0',name:'TRIPLE A',fromH:18,fromMin:0,toH:18,toMin:40},{id:'AF1',name:'WIJF',fromH:19,fromMin:10,toH:19,toMin:55},{id:'AF2',name:'COWBOYS & ALIENS',fromH:20,fromMin:25,toH:21,toMin:15},{id:'AF3',name:'ADMIRAL FREEBEE',fromH:21,fromMin:45,toH:22,toMin:45},{id:'AF4',name:'JASPER STEVERLINCK',fromH:23,fromMin:15,toH:24,toMin:30},{id:'AF5',name:'BMC XXL',fromH:25,fromMin:0,toH:26,toMin:30}],
+    saturday:[{id:'AS0',name:'HURACAN',fromH:16,fromMin:0,toH:16,toMin:35},{id:'AS1',name:'BOSKAT',fromH:17,fromMin:5,toH:17,toMin:45},{id:'AS2',name:'CAPTAIN KAISER',fromH:18,fromMin:15,toH:19,toMin:0},{id:'AS3',name:'ALICE MAE',fromH:19,fromMin:30,toH:20,toMin:20},{id:'AS4',name:'OPROER',fromH:20,fromMin:50,toH:21,toMin:40},{id:'AS5',name:'TOURIST LE MC',fromH:22,fromMin:10,toH:23,toMin:10},{id:'AS6',name:'DAAN',fromH:23,fromMin:40,toH:24,toMin:55},{id:'AS7',name:'DIRK STOOPS',fromH:25,fromMin:0,toH:26,toMin:30}]
+  };
+}
+
+const uz=document.getElementById('upload-zone');
+uz.addEventListener('dragover',e=>{e.preventDefault();uz.classList.add('drag-over');});
+uz.addEventListener('dragleave',()=>uz.classList.remove('drag-over'));
+uz.addEventListener('drop',e=>{e.preventDefault();uz.classList.remove('drag-over');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
+function handleFile(file){if(!requireEdit())return;if(!file)return;const r=new FileReader();r.onload=e=>{try{parseWB(XLSX.read(e.target.result,{type:'binary'}));scheduleCloudSave();toast('✅ Teams geladen — posten & timetable behouden','ok');}catch(err){toast('❌ '+err.message,'err');}};r.readAsBinaryString(file);}
+
+function parseWB(wb){
+  const sn=wb.SheetNames.find(n=>n.toLowerCase()==='teams')||wb.SheetNames[0];
+  const tR=XLSX.utils.sheet_to_json(wb.Sheets[sn]);
+  D.teams=tR.map((r,i)=>({
+    id:'T'+i,name:String(r.Team||r.team||'Team '+(i+1)),members:String(r.Leden||r.leden||''),
+    availability:{friday:parseAvRaw(r.Vrijdag_Van,r.Vrijdag_Tot),saturday:parseAvRaw(r.Zaterdag_Van,r.Zaterdag_Tot)},
+    prefPosts:parseList(r.Voorkeur_Post||r.voorkeur_post),
+    prefColleagues:parseList(r.Voorkeur_Collega||r.voorkeur_collega),
+    breakPref:{friday:parseBreaks(r.Pauze_Vrijdag||r.pauze_vrijdag),saturday:parseBreaks(r.Pauze_Zaterdag||r.pauze_zaterdag)}
+  }));
+  onDataReady();
+}
+function parseAvRaw(f,t){
+  const a=String(f||'').trim().toLowerCase(),b=String(t||'').trim().toLowerCase();
+  if(!a&&!b)return null;
+  if(a==='begin')return{from:'begin',to:b==='einde'?'einde':(parseInt(b)||0)};
+  const na=parseInt(a),nb=parseInt(b);
+  if(isNaN(na)||isNaN(nb)||(na===0&&nb===0))return null;
+  return{from:na,to:b==='einde'?'einde':nb};
+}
+function parseList(v){if(!v)return[];return String(v).split(',').map(s=>s.trim()).filter(Boolean);}
+function parseBreaks(v){if(!v)return[];return String(v).split(',').map(s=>parseInt(s.trim())).filter(n=>!isNaN(n)).slice(0,2);}
+function parseNeedStr(str,av){const out={};if(!av)return out;if(!str||!String(str).trim()){for(let h=av.from;h<av.to;h++)out[h]=1;return out;}const ch={};String(str).split(',').forEach(p=>{const m=p.trim().match(/^(\d+):(\d+)$/);if(m)ch[parseInt(m[1])]=parseInt(m[2]);});const keys=Object.keys(ch).map(Number).sort((a,b)=>a-b);let cur=1;for(let h=av.from;h<av.to;h++){for(const k of keys){if(k<=h)cur=ch[k];}out[h]=Math.max(1,cur);}return out;}
+function getNeed(post,day,hr){const n=post.needPerHour?.[day]?.[hr];return n!==undefined?n:1;}
+function needSummary(nph){if(!nph||!Object.keys(nph).length)return'<span style="color:var(--text-muted)">—</span>';const hrs=Object.keys(nph).map(Number).sort((a,b)=>a-b);const segs=[];let cur=nph[hrs[0]],st=hrs[0];for(let i=1;i<hrs.length;i++){if(nph[hrs[i]]!==cur){segs.push({from:st,to:hrs[i-1],n:cur});cur=nph[hrs[i]];st=hrs[i];}}segs.push({from:st,to:hrs[hrs.length-1],n:cur});return segs.map(s=>`<span style="color:${s.n===2?'var(--gold)':'var(--text-dim)'}">${fh(s.from)}-${fh(s.to+1)}:<b>${s.n}×</b></span>`).join(' ');}
+function needStrFromObj(nph){if(!nph||!Object.keys(nph).length)return'';const hrs=Object.keys(nph).map(Number).sort((a,b)=>a-b);const segs=[];let cur=nph[hrs[0]],st=hrs[0];for(let i=1;i<hrs.length;i++){if(nph[hrs[i]]!==cur){segs.push(`${st}:${cur}`);cur=nph[hrs[i]];st=hrs[i];}}segs.push(`${st}:${cur}`);return segs.join(',');}
+
+function actsForHour(hr,day){return(D.timetable[day]||[]).filter(a=>{const f=a.fromH+a.fromMin/60,t=a.toH+a.toMin/60;return f<hr+1&&t>hr;});}
+
+function ttTheadRow(hours,day){
+  if(!(D.timetable[day]||[]).length)return'';
+  const bg=darkMode?'#0e0e0e':'#f0ede7';
+  let h=`<tr style="height:38px"><th class="row-h" style="background:${bg};border-left:3px solid var(--red);position:sticky;top:0;z-index:6"><div style="color:var(--red);font-family:'Barlow Condensed';font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase">🎵 PROGRAMMA</div></th>`;
+  hours.forEach(hr=>{
+    const pm=isMidnightCol(hr);
+    const acts=actsForHour(hr,day);
+    const a=acts.reduce((b,x)=>!b||(x.fromH+x.fromMin/60)>(b.fromH+b.fromMin/60)?x:b,null);
+    if(!a){h+=`<th style="background:${bg};position:sticky;top:0;z-index:3;${pm?'border-left:2px solid rgba(245,196,0,.6)':''}"></th>`;return;}
+    const cellStart=hr,cellEnd=hr+1;
+    const actStart=a.fromH+a.fromMin/60,actEnd=a.toH+a.toMin/60;
+    const leftPct=Math.max(0,Math.min(100,(actStart-cellStart)*100));
+    const rightPct=Math.max(0,Math.min(100,(cellEnd-actEnd)*100));
+    const isFirstHour=actStart>=cellStart&&actStart<cellEnd;
+    h+=`<th style="background:${bg};position:sticky;top:0;z-index:3;padding:0;${pm?'border-left:2px solid rgba(245,196,0,.6)':''}">
+      <div style="position:relative;height:38px;overflow:visible">
+        <div style="position:absolute;left:${leftPct}%;right:${rightPct}%;top:3px;bottom:3px;background:rgba(200,16,30,.18);border:1px solid rgba(200,16,30,.4);border-radius:3px;overflow:hidden;display:flex;flex-direction:column;justify-content:center;padding:0 3px;min-width:4px;">
+          ${isFirstHour?`<div style="font-family:'Barlow Condensed';font-size:10px;font-weight:800;color:var(--red);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}</div><div style="font-size:8px;color:var(--text-dim);font-family:'JetBrains Mono';white-space:nowrap">${fm(a.fromH,a.fromMin)}–${fm(a.toH,a.toMin)}</div>`:''}
+        </div>
+      </div>
+    </th>`;
+  });
+  return h+'</tr>';
+}
+
+function renderTimetableInvoer(){
+  const fr=D.timetable.friday||[];const sa=D.timetable.saturday||[];
+  const el=document.getElementById('cnt-acts');if(el)el.textContent=(fr.length+sa.length)+' acts';
+  const cont=document.getElementById('timetable-invoer');if(!cont)return;
+  if(!fr.length&&!sa.length){cont.innerHTML='<p style="color:var(--text-dim);font-size:12px">Geen acts. Klik + Vrijdag of + Zaterdag.</p>';return;}
+  const mkRows=(day,acts)=>{if(!acts.length)return'';
+    const sorted=[...acts].sort((a,b)=>(a.fromH*60+a.fromMin)-(b.fromH*60+b.fromMin));
+    return`<p style="font-family:'Barlow Condensed';font-size:10px;font-weight:800;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin:8px 0 5px">${day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06'}</p>
+    <table class="data-table"><thead><tr><th>Artiest</th><th>Van</th><th>Tot</th><th></th></tr></thead>
+    <tbody>${sorted.map(a=>`<tr><td><strong>${a.name}</strong></td>
+      <td style="font-family:'JetBrains Mono';font-size:10px;color:var(--gold)">${fm(a.fromH,a.fromMin)}</td>
+      <td style="font-family:'JetBrains Mono';font-size:10px;color:var(--gold)">${fm(a.toH,a.toMin)}</td>
+      <td><button class="btn btn-xs btn-ghost" onclick="openEditActModal('${a.id}','${day}')">✎</button>
+          <button class="btn btn-xs btn-danger" onclick="deleteAct('${a.id}','${day}')">✕</button></td></tr>`).join('')}
+    </tbody></table>`;
+  };
+  cont.innerHTML=mkRows('friday',fr)+mkRows('saturday',sa);
+}
+
+function loadDemo(){if(!requireEdit())return;
+  D.teams=[
+    {id:'T0',name:'Alpha',members:'Jan Janssen, Piet Pieters',availability:{friday:{from:'begin',to:'einde'},saturday:{from:14,to:'einde'}},prefPosts:['Ingang'],prefColleagues:[],breakPref:{friday:[21],saturday:[22]}},
+    {id:'T1',name:'Bravo',members:'Lisa Van Den Berg, Tom Smeets',availability:{friday:{from:19,to:'einde'},saturday:{from:12,to:25}},prefPosts:['Frontstage'],prefColleagues:['Charlie'],breakPref:{friday:[22,23],saturday:[]}},
+    {id:'T2',name:'Charlie',members:'Sara Claes, Koen Leclercq',availability:{friday:{from:'begin',to:25},saturday:{from:12,to:24}},prefPosts:['Frontstage'],prefColleagues:['Bravo'],breakPref:{friday:[],saturday:[20,23]}},
+    {id:'T3',name:'Delta',members:'Nina Willems, Marc Hermans',availability:{friday:{from:20,to:'einde'},saturday:{from:14,to:'einde'}},prefPosts:[],prefColleagues:[],breakPref:{friday:[],saturday:[]}},
+    {id:'T4',name:'Echo',members:'Lotte Janssens, Jens De Backer',availability:{friday:{from:'begin',to:24},saturday:{from:'begin',to:'einde'}},prefPosts:['Kleedkamers artiesten'],prefColleagues:[],breakPref:{friday:[21],saturday:[22]}},
+    {id:'T5',name:'Foxtrot',members:'Rafaël Desmet, Els Verfaillie',availability:{friday:{from:'begin',to:'einde'},saturday:{from:16,to:'einde'}},prefPosts:[],prefColleagues:[],breakPref:{friday:[23],saturday:[]}},
+    {id:'T6',name:'Golf',members:'Tim Van Acker, An Matthijs',availability:{friday:{from:19,to:25},saturday:{from:12,to:24}},prefPosts:['Uitgang'],prefColleagues:[],breakPref:{friday:[],saturday:[21]}},
+    {id:'T7',name:'Hotel',members:'Ben Hoste, Eva Demulder',availability:{friday:{from:'begin',to:'einde'},saturday:{from:14,to:25}},prefPosts:[],prefColleagues:[],breakPref:{friday:[22],saturday:[22,24]}},
+    {id:'T8',name:'India',members:'Noor Verbeke, Sven Declercq',availability:{friday:{from:20,to:'einde'},saturday:{from:12,to:24}},prefPosts:['VIP'],prefColleagues:['Quebec'],breakPref:{friday:[],saturday:[]}},
+    {id:'T9',name:'Juliet',members:'Fien Depoorter, Axel Vandenberghe',availability:{friday:{from:'begin',to:24},saturday:{from:16,to:'einde'}},prefPosts:[],prefColleagues:[],breakPref:{friday:[21,22],saturday:[]}},
+    {id:'T10',name:'Kilo',members:'Hanne Dewulf, Bram Vandaele',availability:{friday:{from:'begin',to:'einde'},saturday:{from:12,to:22}},prefPosts:['Vestingsmuur'],prefColleagues:[],breakPref:{friday:[],saturday:[]}},
+    {id:'T11',name:'Lima',members:'Elke Verfaillie, Wout Bogaert',availability:{friday:null,saturday:{from:12,to:'einde'}},prefPosts:[],prefColleagues:[],breakPref:{friday:[],saturday:[20,21]}},
+    {id:'T12',name:'Mike',members:'Inge Bekaert, Dries Vandeputte',availability:{friday:{from:'begin',to:'einde'},saturday:null},prefPosts:['Ingang backstage'],prefColleagues:[],breakPref:{friday:[22],saturday:[]}},
+    {id:'T13',name:'November',members:'Silke Detavernier, Joris Allaert',availability:{friday:{from:19,to:25},saturday:{from:14,to:25}},prefPosts:[],prefColleagues:[],breakPref:{friday:[],saturday:[]}},
+    {id:'T14',name:'Oscar',members:'Jolien Messiaen, Pieter Vanthoor',availability:{friday:{from:'begin',to:24},saturday:{from:12,to:25}},prefPosts:['Nooduitgang rechts'],prefColleagues:[],breakPref:{friday:[23],saturday:[23,24]}},
+    {id:'T15',name:'Papa',members:'Anke Dewaele, Dieter Nachtergaele',availability:{friday:{from:20,to:'einde'},saturday:{from:16,to:'einde'}},prefPosts:[],prefColleagues:[],breakPref:{friday:[],saturday:[]}},
+    {id:'T16',name:'Quebec',members:'Lien Vandenberghe, Mathis Lauwers',availability:{friday:{from:'begin',to:'einde'},saturday:{from:12,to:24}},prefPosts:['VIP'],prefColleagues:['India'],breakPref:{friday:[21],saturday:[]}},
+    {id:'T17',name:'Romeo',members:'Yana Demeester, Boris Cools',availability:{friday:{from:19,to:'einde'},saturday:{from:14,to:'einde'}},prefPosts:[],prefColleagues:[],breakPref:{friday:[22,23],saturday:[22]}},
+    {id:'T18',name:'Sierra',members:'Nathalie Claeys, Cedric Verstraete',availability:{friday:{from:'begin',to:23},saturday:{from:12,to:'einde'}},prefPosts:['Nooduitgang links'],prefColleagues:[],breakPref:{friday:[],saturday:[20]}},
+    {id:'T19',name:'Tango',members:'Charlotte Decock, Robin Vande Velde',availability:{friday:{from:'begin',to:'einde'},saturday:{from:12,to:25}},prefPosts:[],prefColleagues:[],breakPref:{friday:[],saturday:[]}},
+    {id:'T20',name:'Uniform',members:'Stien Vandendriessche, Niels Sabbe',availability:{friday:{from:20,to:'einde'},saturday:{from:14,to:'einde'}},prefPosts:['Nooduitgang links'],prefColleagues:[],breakPref:{friday:[23],saturday:[23]}},
+    {id:'T21',name:'Victor',members:'Amber Desplenter, Ruben Gheysen',availability:{friday:{from:'begin',to:'einde'},saturday:{from:12,to:25}},prefPosts:[],prefColleagues:[],breakPref:{friday:[22],saturday:[22]}},
+    {id:'T22',name:'Whiskey',members:'Julie Vermeersch, Kevin Tanghe',availability:{friday:{from:19,to:25},saturday:{from:16,to:'einde'}},prefPosts:[],prefColleagues:[],breakPref:{friday:[],saturday:[]}},
+    {id:'T23',name:'Xray',members:'Nienke Baert, Quinten Dhaene',availability:{friday:{from:'begin',to:'einde'},saturday:{from:12,to:24}},prefPosts:['Ingang'],prefColleagues:['Alpha'],breakPref:{friday:[21,22],saturday:[]}},
+    {id:'T24',name:'Yankee',members:'Olivia Desmet, Jasper De Graef',availability:{friday:{from:'begin',to:24},saturday:{from:14,to:'einde'}},prefPosts:['Frontstage'],prefColleagues:[],breakPref:{friday:[22],saturday:[24,25]}},
+  ];
+  initDefaultPostsAndTimetable();
+  try{localStorage.removeItem(LS_POSTS);localStorage.removeItem(LS_TT);}catch(e){}
+  onDataReady();scheduleCloudSave();toast('🎸 Demo data geladen (25 teams, 13 posten, timetable)','ok');
+}
+
+function onDataReady(){renderInputTables();renderTimetableInvoer();goTab('invoer');}
+function renderInputTables(){
+  document.getElementById('cnt-teams').textContent=D.teams.length+' teams';
+  document.getElementById('cnt-posts').textContent=D.posts.length+' posten';
+  document.getElementById('tbody-teams').innerHTML=D.teams.map((t,i)=>`<tr>
+    <td style="color:var(--text-muted)">${i+1}</td>
+    <td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${TPAL[i%TPAL.length]};flex-shrink:0"></span><strong>${t.name}</strong></span></td>
+    <td style="color:var(--text-dim);max-width:155px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.members}">${t.members||'—'}</td>
+    <td style="font-size:10px">${avStr(t.availability.friday)}</td>
+    <td style="font-size:10px">${avStr(t.availability.saturday)}</td>
+    <td style="color:var(--gold);font-size:10px">${(t.breakPref.friday||[]).map(h=>fh(h)).join(', ')||'—'}</td>
+    <td style="color:var(--gold);font-size:10px">${(t.breakPref.saturday||[]).map(h=>fh(h)).join(', ')||'—'}</td>
+    <td style="color:var(--text-dim);font-size:10px">${t.prefPosts.join(', ')||'—'}</td>
+    <td style="color:var(--text-dim);font-size:10px">${t.prefColleagues.join(', ')||'—'}</td>
+    <td><button class="btn btn-xs btn-ghost" onclick="openEditTeamModal('${t.id}')">✎</button>
+        <button class="btn btn-xs btn-danger" onclick="deleteTeam('${t.id}')">✕</button></td></tr>`).join('');
+  document.getElementById('tbody-posts').innerHTML=D.posts.map((p,i)=>`<tr>
+    <td style="color:var(--text-muted)">${i+1}</td>
+    <td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${PPAL[i%PPAL.length]};flex-shrink:0"></span><strong>${p.name}</strong>${isOpkuis(p)?'<span style="background:var(--gold);color:#080808;border-radius:3px;padding:1px 5px;font-size:9px;font-family:\'Barlow Condensed\';font-weight:700;margin-left:4px">OPKUIS</span>':''}</span></td>
+    <td style="font-size:10px">${avStr(p.schedule.friday?p.schedule.friday:null)}</td>
+    <td style="font-size:10px">${avStr(p.schedule.saturday?p.schedule.saturday:null)}</td>
+    <td style="font-size:10px">${needSummary(p.needPerHour.friday)}</td>
+    <td style="font-size:10px">${needSummary(p.needPerHour.saturday)}</td>
+    <td><button class="btn btn-xs btn-ghost" onclick="openEditPostModal('${p.id}')">✎</button>
+        <button class="btn btn-xs btn-danger" onclick="deletePost('${p.id}')">✕</button></td></tr>`).join('');
+}
+
+function closeModal(){document.getElementById('modal-backdrop').classList.remove('open');}
+function _openModal(title,body){document.getElementById('modal-title').textContent=title;document.getElementById('modal-body').innerHTML=body;document.getElementById('modal-backdrop').classList.add('open');}
+function openEditTeamModal(id){const t=D.teams.find(x=>x.id===id);if(!t)return;modalMode='editTeam';modalId=id;_openModal('Team: '+t.name,teamForm(t));}
+function openNewTeamModal(){modalMode='newTeam';modalId=null;_openModal('Nieuw Team',teamForm({name:'',members:'',availability:{friday:{from:'begin',to:'einde'},saturday:{from:'begin',to:'einde'}},prefPosts:[],prefColleagues:[],breakPref:{friday:[],saturday:[]}}));}
+function openEditPostModal(id){const p=D.posts.find(x=>x.id===id);if(!p)return;modalMode='editPost';modalId=id;_openModal('Post: '+p.name,postForm(p));}
+function openNewPostModal(){modalMode='newPost';modalId=null;_openModal('Nieuwe Post',postForm({name:'',schedule:{friday:null,saturday:null},needPerHour:{friday:{},saturday:{}}}));}
+function openNewActModal(day){modalMode='newAct';modalId=null;modalDay=day;_openModal('Act Toevoegen – '+(day==='friday'?'Vrijdag':'Zaterdag'),actForm({name:'',fromH:'',fromMin:0,toH:'',toMin:0}));}
+function openEditActModal(id,day){const a=(D.timetable[day]||[]).find(x=>x.id===id);if(!a)return;modalMode='editAct';modalId=id;modalDay=day;_openModal('Act Bewerken',actForm(a));}
+
+function _avFieldVan(prefix,val){
+  const isBegin=val==='begin';const numVal=isBegin?'':val??'';
+  return`<div class="form-group"><label>Van (uur)</label>
+    <div style="display:flex;gap:5px;align-items:center">
+      <select id="${prefix}-mode" onchange="toggleAvField('${prefix}')" style="background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:5px 8px;font-family:'Barlow',sans-serif;font-size:12px">
+        <option value="num" ${!isBegin?'selected':''}>Specifiek uur</option>
+        <option value="begin" ${isBegin?'selected':''}>Begin festival</option>
+      </select>
+      <input id="${prefix}-num" type="number" min="0" max="30" value="${numVal}" placeholder="uur" style="width:70px;${isBegin?'display:none':''}">
+    </div>
+  </div>`;
+}
+function _avFieldTot(prefix,val){
+  const isEinde=val==='einde';const numVal=isEinde?'':val??'';
+  return`<div class="form-group"><label>Tot (uur, 24+=nacht)</label>
+    <div style="display:flex;gap:5px;align-items:center">
+      <select id="${prefix}-mode" onchange="toggleAvField('${prefix}')" style="background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:5px 8px;font-family:'Barlow',sans-serif;font-size:12px">
+        <option value="num" ${!isEinde?'selected':''}>Specifiek uur</option>
+        <option value="einde" ${isEinde?'selected':''}>Einde festival</option>
+      </select>
+      <input id="${prefix}-num" type="number" min="0" max="30" value="${numVal}" placeholder="uur" style="width:70px;${isEinde?'display:none':''}">
+    </div>
+  </div>`;
+}
+function toggleAvField(prefix){const mode=document.getElementById(prefix+'-mode').value;document.getElementById(prefix+'-num').style.display=mode==='num'?'':'none';}
+function getAvFieldVal(prefix){const mode=document.getElementById(prefix+'-mode').value;if(mode==='begin')return'begin';if(mode==='einde')return'einde';return document.getElementById(prefix+'-num').value||'';}
+
+function teamForm(t){
+  const fFrom=t.availability?.friday?.from??'begin';const fTo=t.availability?.friday?.to??'einde';
+  const sFrom=t.availability?.saturday?.from??'begin';const sTo=t.availability?.saturday?.to??'einde';
+  return`<div class="form-row full"><div class="form-group"><label>Teamnaam</label><input id="f-name" value="${t.name||''}"></div></div>
+  <div class="form-row full"><div class="form-group"><label>Leden (Voornaam Naam, komma-gescheiden)</label><input id="f-members" value="${t.members||''}"></div></div>
+  <div style="margin-bottom:9px"><p style="font-size:9px;font-family:'Barlow Condensed';font-weight:800;letter-spacing:1px;color:var(--red);text-transform:uppercase;margin-bottom:7px">Vrijdag</p>
+  <div class="form-row">${_avFieldVan('f-fv',fFrom)}${_avFieldTot('f-ft',fTo)}</div></div>
+  <div style="margin-bottom:9px"><p style="font-size:9px;font-family:'Barlow Condensed';font-weight:800;letter-spacing:1px;color:var(--red);text-transform:uppercase;margin-bottom:7px">Zaterdag</p>
+  <div class="form-row">${_avFieldVan('f-sv',sFrom)}${_avFieldTot('f-st',sTo)}</div></div>
+  <div class="form-row full"><div class="form-group"><label>Post Voorkeur(en) — komma-gescheiden</label><input id="f-ppost" value="${(t.prefPosts||[]).join(', ')}"></div></div>
+  <div class="form-row full"><div class="form-group"><label>Collega Voorkeur(en) — komma-gescheiden</label><input id="f-pcol" value="${(t.prefColleagues||[]).join(', ')}"></div></div>
+  <div class="form-row">
+    <div class="form-group"><label>Pauze Vrijdag (max 2 uren)</label><input id="f-bfr" value="${(t.breakPref?.friday||[]).join(', ')}"><span class="form-hint">bv. 21,23</span></div>
+    <div class="form-group"><label>Pauze Zaterdag</label><input id="f-bsa" value="${(t.breakPref?.saturday||[]).join(', ')}"></div>
+  </div>`;
+}
+function postForm(p){
+  return`<div class="form-row full"><div class="form-group"><label>Postnaam</label><input id="f-name" value="${p.name||''}"></div></div>
+  <div class="form-row">
+    <div class="form-group"><label>Vrijdag Van</label><input id="f-fv" type="number" min="0" max="30" value="${p.schedule?.friday?.from??''}"></div>
+    <div class="form-group"><label>Vrijdag Tot</label><input id="f-ft" type="number" min="0" max="30" value="${p.schedule?.friday?.to??''}"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Zaterdag Van</label><input id="f-sv" type="number" min="0" max="30" value="${p.schedule?.saturday?.from??''}"></div>
+    <div class="form-group"><label>Zaterdag Tot</label><input id="f-st" type="number" min="0" max="30" value="${p.schedule?.saturday?.to??''}"></div>
+  </div>
+  <div class="form-row full"><div class="form-group"><label>Teams/Uur Vrijdag</label><input id="f-nfr" value="${needStrFromObj(p.needPerHour?.friday)}"><span class="form-hint">bv. 18:1,22:2,25:1</span></div></div>
+  <div class="form-row full"><div class="form-group"><label>Teams/Uur Zaterdag</label><input id="f-nsa" value="${needStrFromObj(p.needPerHour?.saturday)}"></div></div>`;
+}
+function actForm(a){
+  return`<div class="form-row full"><div class="form-group"><label>Artiestennaam</label><input id="f-name" value="${a.name||''}" placeholder="bv. TRIPLE A"></div></div>
+  <div class="form-row">
+    <div class="form-group"><label>Van – Uur (24+=nacht)</label><input id="f-fh" type="number" min="0" max="30" value="${a.fromH??''}"></div>
+    <div class="form-group"><label>Van – Min</label><input id="f-fm" type="number" min="0" max="59" value="${a.fromMin??0}"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Tot – Uur</label><input id="f-th" type="number" min="0" max="30" value="${a.toH??''}"></div>
+    <div class="form-group"><label>Tot – Min</label><input id="f-tm" type="number" min="0" max="59" value="${a.toMin??0}"></div>
+  </div>`;
+}
+function saveModal(){if(!requireEdit())return;
+  const g=id=>document.getElementById(id)?.value||'';
+  if(modalMode==='editTeam'||modalMode==='newTeam'){
+    const fFrom=getAvFieldVal('f-fv'),fTo=getAvFieldVal('f-ft');
+    const sFrom=getAvFieldVal('f-sv'),sTo=getAvFieldVal('f-st');
+    const mkAv=(f,t)=>{if(!f&&!t)return null;return{from:f||'begin',to:t||'einde'};};
+    const obj={id:modalMode==='newTeam'?'T'+Date.now():modalId,name:g('f-name').trim()||'Team',members:g('f-members').trim(),availability:{friday:mkAv(fFrom,fTo),saturday:mkAv(sFrom,sTo)},prefPosts:parseList(g('f-ppost')),prefColleagues:parseList(g('f-pcol')),breakPref:{friday:parseBreaks(g('f-bfr')),saturday:parseBreaks(g('f-bsa'))}};
+    if(modalMode==='newTeam')D.teams.push(obj);else{const i=D.teams.findIndex(t=>t.id===modalId);if(i!==-1)D.teams[i]=obj;}
+    renderInputTables();
+  }else if(modalMode==='editPost'||modalMode==='newPost'){
+    const fa=parseAvRaw(g('f-fv'),g('f-ft')),sa=parseAvRaw(g('f-sv'),g('f-st'));
+    const fav=fa?{from:resolveHour(fa.from,'friday','from'),to:resolveHour(fa.to,'friday','to')}:null;
+    const sav=sa?{from:resolveHour(sa.from,'saturday','from'),to:resolveHour(sa.to,'saturday','to')}:null;
+    const obj={id:modalMode==='newPost'?'P'+Date.now():modalId,name:g('f-name').trim()||'Post',schedule:{friday:fav,saturday:sav},needPerHour:{friday:parseNeedStr(g('f-nfr'),fav),saturday:parseNeedStr(g('f-nsa'),sav)}};
+    if(modalMode==='newPost')D.posts.push(obj);else{const i=D.posts.findIndex(p=>p.id===modalId);if(i!==-1)D.posts[i]=obj;}
+    renderInputTables();savePersistent();
+  }else if(modalMode==='newAct'||modalMode==='editAct'){
+    const obj={id:modalMode==='newAct'?'A'+Date.now():modalId,name:g('f-name').trim()||'Artiest',fromH:parseInt(g('f-fh'))||0,fromMin:parseInt(g('f-fm'))||0,toH:parseInt(g('f-th'))||0,toMin:parseInt(g('f-tm'))||0};
+    if(!D.timetable[modalDay])D.timetable[modalDay]=[];
+    if(modalMode==='newAct')D.timetable[modalDay].push(obj);else{const i=D.timetable[modalDay].findIndex(a=>a.id===modalId);if(i!==-1)D.timetable[modalDay][i]=obj;}
+    renderTimetableInvoer();savePersistent();if(S)renderSchedView();
+  }
+  scheduleCloudSave();closeModal();toast('✅ Opgeslagen','ok');
+}
+function deleteTeam(id){if(!requireEdit())return;if(!confirm('Team verwijderen?'))return;D.teams=D.teams.filter(t=>t.id!==id);renderInputTables();savePersistent();}
+function deletePost(id){if(!requireEdit())return;if(!confirm('Post verwijderen?'))return;D.posts=D.posts.filter(p=>p.id!==id);renderInputTables();savePersistent();}
+function deleteAct(id,day){if(!requireEdit())return;if(!confirm('Act verwijderen?'))return;D.timetable[day]=(D.timetable[day]||[]).filter(a=>a.id!==id);renderTimetableInvoer();savePersistent();if(S)renderSchedView();}
+
+function doGenerate(){
+  if(!requireEdit())return;
+  if(!D.teams.length){toast('⚠️ Geen data','err');return;}
+  S=buildSchedule();renderStats();renderSchedView();renderValidation();
+  goTab('rooster');
+  ['btn-xls','btn-pdf','btn-regen','btn-publish'].forEach(id=>document.getElementById(id).style.display='');
+  scheduleCloudSave();
+  toast('⚡ Rooster gegenereerd!','ok');
+}
+function buildSchedule(){
+  const sched={friday:{},saturday:{}};const st={};
+  D.teams.forEach(t=>{st[t.id]={tot:0,dayShifts:{friday:0,saturday:0},postCounts:{},lastH:{friday:-99,saturday:-99},consec:{friday:0,saturday:0},consecFree:{friday:0,saturday:0}};});
+  ['friday','saturday'].forEach(day=>{
+    const hSet=new Set();D.posts.forEach(p=>{const ps=p.schedule[day];if(ps)for(let h=ps.from;h<ps.to;h++)hSet.add(h);});
+    const hours=[...hSet].sort((a,b)=>a-b);
+    hours.forEach(hour=>{
+      sched[day][hour]={};const usedH=new Set();
+      const sorted=[...D.posts].sort((a,b)=>{if(isOpkuis(a)&&!isOpkuis(b))return 1;if(!isOpkuis(a)&&isOpkuis(b))return -1;return getNeed(b,day,hour)-getNeed(a,day,hour);});
+      sorted.forEach(post=>{
+        const ps=post.schedule[day];if(!ps||hour<ps.from||hour>=ps.to){sched[day][hour][post.id]=[];return;}
+        const need=getNeed(post,day,hour);
+        if(isOpkuis(post)){const all=D.teams.filter(t=>!usedH.has(t.id)&&isAvail(t,day,hour)).map(t=>t.id);sched[day][hour][post.id]=all;all.forEach(tid=>{usedH.add(tid);st[tid].tot++;st[tid].dayShifts[day]++;st[tid].postCounts[post.id]=(st[tid].postCounts[post.id]||0)+1;});return;}
+        const cands=D.teams.filter(t=>!usedH.has(t.id)).map(t=>({t,sc:scoreT(t,post,hour,day,st)})).filter(x=>x.sc>-9000).sort((a,b)=>b.sc-a.sc);
+        const assigned=[];
+        if(need>=2&&cands.length>=2){let found=false;for(let i=0;i<cands.length&&!found;i++){for(const cn of cands[i].t.prefColleagues){const bi=cands.findIndex((x,xi)=>xi!==i&&x.t.name.toLowerCase()===cn.toLowerCase());if(bi!==-1){assigned.push(cands[i].t.id,cands[bi].t.id);found=true;break;}}}if(!found)for(const c of cands){if(assigned.length>=need)break;if(!assigned.includes(c.t.id))assigned.push(c.t.id);}
+        }else for(const c of cands){if(assigned.length>=need)break;assigned.push(c.t.id);}
+        sched[day][hour][post.id]=assigned;
+        assigned.forEach(tid=>{usedH.add(tid);const s=st[tid];s.tot++;s.dayShifts[day]++;s.postCounts[post.id]=(s.postCounts[post.id]||0)+1;s.consec[day]=(s.lastH[day]===hour-1)?s.consec[day]+1:1;s.lastH[day]=hour;s.consecFree[day]=0;});
+      });
+      D.teams.forEach(t=>{if(usedH.has(t.id))return;if(isAvail(t,day,hour))st[t.id].consecFree[day]=(st[t.id].consecFree[day]||0)+1;});
+    });
+  });
+  return sched;
+}
+function scoreT(team,post,hour,day,st){
+  if(!isAvail(team,day,hour))return -10000;
+  if((team.breakPref[day]||[]).includes(hour))return -9500;
+  const s=st[team.id];let score=100;
+  score-=(s.dayShifts[day]||0)*14;
+  const cnt=s.postCounts[post.id]||0;const isPref=team.prefPosts.some(pp=>pp.toLowerCase()===post.name.toLowerCase());
+  if(isPref){score+=40;score-=cnt*7;}else{if(cnt===0)score+=5;else if(cnt===1)score-=65;else if(cnt===2)score-=150;else if(cnt===3)score-=270;else score-=420;}
+  const consec=(s.lastH[day]===hour-1)?s.consec[day]:0;if(consec===1)score-=5;else if(consec===2)score-=20;else if(consec===3)score-=55;else if(consec>=4)score-=115;
+  const cf=s.consecFree[day]||0;if(cf===1)score+=10;else if(cf===2)score+=30;else if(cf>=3)score+=55;
+  score+=(Math.random()-.5)*3;return score;
+}
+
+function renderValidation(){
+  const panel=document.getElementById('validation-panel');if(!panel)return;
+  const v=runValidation();
+  const success=v.critical.length===0&&v.understaffed.length===0&&v.doubleAssign.length===0;
+  const sec=(title,color,items,render)=>{if(!items.length)return'';return`<div style="margin-bottom:10px"><div style="font-family:'Barlow Condensed';font-size:9px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:${color};margin-bottom:5px">${title} (${items.length})</div>`+items.map(render).join('')+`</div>`;};
+  let h=`<div class="val-banner ${success?'success':'fail'}"><span style="font-family:'Anton';font-size:13px;letter-spacing:2px;color:${success?'var(--green)':'var(--red)'}">${success?'✅ ROOSTER GESLAAGD':'⚠️ ROOSTER ONVOLLEDIG'}</span><span style="font-size:11px;color:var(--text-dim);display:block;margin-top:2px">${success?'Alle posten volledig bezet.':'Niet alle voorwaarden zijn voldaan — zie details.'}</span></div>
+  <div class="card" style="padding:13px">`;
+  h+=sec('Dubbele toewijzingen','var(--red)',v.doubleAssign,x=>`<div class="val-item val-err">❌ <span>${x}</span></div>`);
+  h+=sec('Kritisch','var(--red)',v.critical,x=>`<div class="val-item val-err"><span>${x.msg}</span></div>${x.details?`<div class="val-details">${x.details}</div>`:''}`);
+  h+=sec('Onvoldoende bezetting','var(--gold)',v.understaffed,x=>`<div class="val-item val-warn">⚠️ <span>${x}</span></div>`);
+  h+=sec('Waarschuwingen','var(--gold)',v.warnings,x=>`<div class="val-item val-warn"><span>${x.msg}</span></div>${x.details?`<div class="val-details">${x.details}</div>`:''}`);
+  h+=sec('Voldaan','var(--green)',v.ok,x=>`<div class="val-item val-ok"><span>${x}</span></div>`);
+  h+=`</div>`;panel.style.display='';panel.innerHTML=h;
+}
+function runValidation(){
+  const crit=[],warn=[],ok=[],understaffed=[],doubleAssign=[];
+  ['friday','saturday'].forEach(day=>{Object.entries(S[day]||{}).forEach(([hrStr,hp])=>{const hr=parseInt(hrStr);const seen={};Object.entries(hp).forEach(([pid,arr])=>{arr.forEach(tid=>{if(seen[tid]){const p1=D.posts.find(p=>p.id===seen[tid]);const p2=D.posts.find(p=>p.id===pid);const t=D.teams.find(t=>t.id===tid);doubleAssign.push(`${day==='friday'?'Vrijdag':'Zaterdag'} ${fh(hr)}: ${t?.name} op zowel "${p1?.name}" als "${p2?.name}"`);}else seen[tid]=pid;});});});});
+  const avVio=[];['friday','saturday'].forEach(day=>{Object.entries(S[day]||{}).forEach(([hrStr,hp])=>{const hr=parseInt(hrStr);Object.entries(hp).forEach(([pid,arr])=>{arr.forEach(tid=>{const t=D.teams.find(x=>x.id===tid);if(!isAvail(t,day,hr)){const post=D.posts.find(p=>p.id===pid);avVio.push(`${day==='friday'?'Vr':'Za'} ${fh(hr)}: ${t?.name} op ${post?.name}`);}});});});});
+  if(avVio.length===0)ok.push('✅ Alle shifts binnen beschikbaarheid');else crit.push({msg:`❌ ${avVio.length} shift(s) buiten beschikbaarheid`,details:avVio.slice(0,6).join(' · ')+(avVio.length>6?` ... (+${avVio.length-6})`:'')} );
+  ['friday','saturday'].forEach(day=>{D.posts.forEach(post=>{const ps=post.schedule[day];if(!ps)return;for(let h=ps.from;h<ps.to;h++){const arr=(S[day][h]?.[post.id]||[]);const need=getNeed(post,day,h);if(arr.length<need&&!isOpkuis(post))understaffed.push(`${day==='friday'?'Vrijdag':'Zaterdag'} ${fh(h)} – ${post.name}: ${arr.length}/${need} team${need>1?'s':''} (${need-arr.length} te weinig)`);}});});
+  if(understaffed.length===0)ok.push(`✅ Alle post-slots volledig bezet`);
+  let bOk=0;const bVio=[];['friday','saturday'].forEach(day=>{D.teams.forEach(team=>{(team.breakPref[day]||[]).forEach(hr=>{const working=Object.values(S[day]?.[hr]||{}).some(a=>a.includes(team.id));if(working)bVio.push(`${team.name} ${day==='friday'?'Vr':'Za'} ${fh(hr)}`);else bOk++;});});});
+  const bTot=bOk+bVio.length;if(bTot===0)ok.push('✅ Geen pauze-voorkeuren');else if(bVio.length===0)ok.push(`✅ Alle ${bTot} pauze-voorkeuren gerespecteerd`);else warn.push({msg:`⚠️ ${bVio.length}/${bTot} pauze-voorkeur(en) niet gerespecteerd`,details:bVio.join(' · ')});
+  const ppMissed=[];D.teams.forEach(team=>{if(!team.prefPosts.length)return;const prefObjs=D.posts.filter(p=>team.prefPosts.some(pp=>pp.toLowerCase()===p.name.toLowerCase()));const hasAny=['friday','saturday'].some(day=>Object.values(S[day]||{}).some(hp=>prefObjs.some(p=>(hp[p.id]||[]).includes(team.id))));if(!hasAny)ppMissed.push(team.name+' ('+team.prefPosts.join(', ')+')');}); 
+  const ppTot=D.teams.filter(t=>t.prefPosts.length).length;if(ppTot===0)ok.push('✅ Geen post-voorkeuren');else if(ppMissed.length===0)ok.push(`✅ Alle ${ppTot} teams op voorkeur-post`);else warn.push({msg:`⚠️ ${ppMissed.length}/${ppTot} teams niet op voorkeur-post`,details:ppMissed.join(' · ')});
+  const cpMissed=[];D.teams.forEach(team=>{if(!team.prefColleagues.length)return;const paired=['friday','saturday'].some(day=>Object.values(S[day]||{}).some(hp=>Object.values(hp).some(arr=>{if(arr.length<2||!arr.includes(team.id))return false;return team.prefColleagues.some(cn=>{const col=D.teams.find(t=>t.name.toLowerCase()===cn.toLowerCase());return col&&arr.includes(col.id);});})));if(!paired)cpMissed.push(team.name+' → '+team.prefColleagues.join(', '));});
+  const cpTot=D.teams.filter(t=>t.prefColleagues.length).length;if(cpTot===0)ok.push('✅ Geen collega-voorkeuren');else if(cpMissed.length===0)ok.push(`✅ Alle ${cpTot} collega-paren samengebracht`);else warn.push({msg:`⚠️ ${cpMissed.length}/${cpTot} collega-paren niet samengebracht`,details:cpMissed.join(' · ')});
+  const postRep={};D.teams.forEach(t=>{postRep[t.id]={};});['friday','saturday'].forEach(day=>{Object.values(S[day]||{}).forEach(hp=>{Object.entries(hp).forEach(([pid,arr])=>{arr.forEach(tid=>{if(postRep[tid])postRep[tid][pid]=(postRep[tid][pid]||0)+1;});});});});
+  const repProblems=[];let maxRep=0;D.teams.forEach(team=>{Object.entries(postRep[team.id]||{}).forEach(([pid,cnt])=>{const post=D.posts.find(p=>p.id===pid);const isPref=team.prefPosts.some(pp=>pp.toLowerCase()===post?.name?.toLowerCase());if(cnt>2&&!isPref&&!isOpkuis(post||{}))repProblems.push(`${team.name}→${post?.name}: ${cnt}×`);if(cnt>maxRep)maxRep=cnt;});});
+  if(repProblems.length===0)ok.push(`✅ Goede afwisseling (max ${maxRep}× per post per team)`);else warn.push({msg:`⚠️ Post-herhaling >2× (niet-voorkeur): ${repProblems.length} gevallen`,details:repProblems.slice(0,6).join(' · ')+(repProblems.length>6?` ... (+${repProblems.length-6})`:'')} );
+  const counts={};D.teams.forEach(t=>{counts[t.id]={friday:0,saturday:0};});['friday','saturday'].forEach(day=>{Object.values(S[day]||{}).forEach(hp=>Object.values(hp).forEach(a=>a.forEach(tid=>{if(counts[tid])counts[tid][day]++;})));});
+  ['friday','saturday'].forEach(day=>{const vals=D.teams.map(t=>counts[t.id][day]).filter(v=>v>0);if(!vals.length)return;const mn=Math.min(...vals),mx=Math.max(...vals);const lbl=day==='friday'?'vrijdag':'zaterdag';if(mx-mn<=2)ok.push(`✅ Goede verdeling ${lbl}: min ${mn}, max ${mx} shifts`);else{const outliers=D.teams.filter(t=>counts[t.id][day]===mx||counts[t.id][day]===mn).map(t=>`${t.name}:${counts[t.id][day]}`).join(', ');warn.push({msg:`⚠️ Ongelijke verdeling ${lbl}: min ${mn}, max ${mx}`,details:outliers});}});
+  return{critical:crit,warnings:warn,ok,understaffed,doubleAssign};
+}
+
+function shiftCountsForDay(day){const c={};D.teams.forEach(t=>{c[t.id]=0;});if(!S)return c;Object.values(S[day]||{}).forEach(hp=>Object.values(hp).forEach(a=>a.forEach(tid=>{if(c[tid]!==undefined)c[tid]++;})));return c;}
+function renderStats(){
+  const c=shiftCountsForDay(activeDay);let teams=[...D.teams];
+  if(statSort==='alpha')teams.sort((a,b)=>a.name.localeCompare(b.name));else teams.sort((a,b)=>(c[b.id]||0)-(c[a.id]||0));
+  const max=Math.max(...Object.values(c),1);
+  document.getElementById('stats-grid').innerHTML=teams.map(t=>{const i=D.teams.indexOf(t);const col=TPAL[i%TPAL.length];const n=c[t.id]||0;return`<div class="stat-item"><div class="stat-top"><span class="stat-name" style="color:${col}">${t.name}</span><span class="stat-num" style="color:${col}">${n}</span></div><div class="stat-members" style="color:${col}88">${t.members}</div><div class="stat-bar"><div class="stat-fill" style="width:${(n/max*100).toFixed(1)}%;background:${col}"></div></div></div>`;}).join('');
+}
+
+function onFilterType(){filterType=document.getElementById('flt-type').value;const fv=document.getElementById('flt-val');if(filterType==='team'){fv.style.display='';fv.innerHTML=D.teams.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');filterVal=D.teams[0]?.id||null;}else if(filterType==='post'){fv.style.display='';fv.innerHTML=D.posts.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');filterVal=D.posts[0]?.id||null;}else{fv.style.display='none';filterVal=null;}renderSchedView();}
+function onFilterVal(){filterVal=document.getElementById('flt-val').value;renderSchedView();}
+function renderSchedView(){const el=document.getElementById('sched-view');if(!S){el.innerHTML='<div class="empty"><h3>GEEN ROOSTER</h3></div>';return;}if(filterType==='team'&&filterVal){renderTeamDetail(el);return;}if(filterType==='post'&&filterVal){renderPostDetail(el);return;}activeView==='post'?renderGridPost(el):renderGridTeam(el);}
+
+function buildGridHeader(hours,day,rowLabel){
+  const surfBg=`background:var(--surface)`;
+  let h=`<thead>${ttTheadRow(hours,day)}<tr>`;
+  h+=`<th class="row-h" style="${surfBg};position:sticky;top:38px;z-index:5;border-bottom:2px solid var(--border)">${rowLabel}</th>`;
+  hours.forEach(hr=>{
+    const pm=isMidnightCol(hr);
+    h+=`<th class="hour-col${isPM(hr)?' midnight':''}" style="${surfBg};position:sticky;top:38px;z-index:4;${pm?'border-left:2px solid rgba(245,196,0,.6)':'border-top:2px solid var(--border-hi)'}">${fh(hr)}</th>`;
+  });
+  return h+'</tr></thead>';
+}
+
+function renderGridPost(el){
+  const dd=S[activeDay]||{};const hours=Object.keys(dd).map(Number).sort((a,b)=>a-b);
+  if(!hours.length){el.innerHTML='<div class="empty"><h3>GEEN SHIFTS</h3></div>';return;}
+  let h=`<div class="sched-wrap"><table class="sched-grid">${buildGridHeader(hours,activeDay,'POST')}<tbody>`;
+  D.posts.forEach((post,pi)=>{
+    const col=PPAL[pi%PPAL.length];const opk=isOpkuis(post);
+    h+=`<tr><td class="row-h" style="border-left:3px solid ${col}${opk?';background:rgba(245,196,0,.06)':''}">
+      <div style="color:${col};font-family:'Barlow Condensed';font-size:11px;font-weight:800;text-transform:uppercase;line-height:1.2">${post.name}</div>
+      ${opk?'<div style="font-size:8px;color:var(--gold);font-family:\'Barlow Condensed\';font-weight:700">ALLE TEAMS</div>':''}
+    </td>`;
+    hours.forEach(hr=>{
+      const ps=post.schedule[activeDay];const active=ps&&hr>=ps.from&&hr<ps.to;
+      const pm=isMidnightCol(hr);
+      if(!active){h+=`<td class="inactive" style="${pm?'border-left:2px solid rgba(245,196,0,.3)':''}"></td>`;return;}
+      const assigned=dd[hr]?.[post.id]||[];const need=getNeed(post,activeDay,hr);
+      h+=`<td style="background:${need===2?'rgba(200,16,30,.04)':opk?'rgba(245,196,0,.03)':'transparent'}${pm?';border-left:2px solid rgba(245,196,0,.3)':''}"
+        id="c-${activeDay}-${hr}-${post.id}"
+        ondragover="dOver(event)" ondragleave="dLeave(event)" ondrop="dDrop(event,'${activeDay}',${hr},'${post.id}')">
+        <div class="cell-content">`;
+      for(let s=0;s<(opk?assigned.length:need);s++){
+        if(s<assigned.length){const tid=assigned[s];const tm=D.teams.find(t=>t.id===tid);if(!tm)continue;const col2=tc(tid);
+          h+=`<div class="chip" style="background:${col2}18;border-color:${col2}42;" draggable="true"
+            ondragstart="dStart(event,'${tid}','${activeDay}',${hr},'${post.id}')" ondragend="dEnd(event)" title="${tm.members}">
+            <span class="chip-name" style="color:${col2}">${tm.name}</span>
+            <span class="chip-members" style="color:${col2}">${tm.members}</span></div>`;
+        }else h+=`<div class="empty-slot"></div>`;
+      }
+      h+='</div></td>';
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';el.innerHTML=h;
+}
+
+function renderGridTeam(el){
+  const dd=S[activeDay]||{};const hours=Object.keys(dd).map(Number).sort((a,b)=>a-b);
+  if(!hours.length){el.innerHTML='<div class="empty"><h3>GEEN SHIFTS</h3></div>';return;}
+  const lk={};hours.forEach(hr=>{lk[hr]={};Object.entries(dd[hr]||{}).forEach(([pid,arr])=>arr.forEach(tid=>{lk[hr][tid]=pid;}));});
+  let teams=[...D.teams];const c=shiftCountsForDay(activeDay);
+  if(statSort==='count')teams.sort((a,b)=>(c[b.id]||0)-(c[a.id]||0));else teams.sort((a,b)=>a.name.localeCompare(b.name));
+  let h=`<div class="sched-wrap"><table class="sched-grid">${buildGridHeader(hours,activeDay,'TEAM')}<tbody>`;
+  teams.forEach(team=>{
+    const col=tc(team.id);
+    h+=`<tr><td class="row-h" style="border-left:3px solid ${col}">
+      <div style="color:${col};font-family:'Barlow Condensed';font-size:11px;font-weight:800;text-transform:uppercase">${team.name}</div>
+      <div style="color:${col};font-size:8px;opacity:.65;font-family:'Barlow';text-transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:125px">${team.members}</div>
+    </td>`;
+    hours.forEach(hr=>{
+      const av=getAv(team,activeDay);const inRange=av&&hr>=av.from&&hr<av.to;
+      const isBreak=(team.breakPref[activeDay]||[]).includes(hr);const pid=lk[hr]?.[team.id];
+      const pm=isMidnightCol(hr);const pmB=pm?';border-left:2px solid rgba(245,196,0,.3)':'';
+      if(!inRange){h+=`<td class="inactive" style="${pm?'border-left:2px solid rgba(245,196,0,.3)':''}"></td>`;return;}
+      if(pid){const post=D.posts.find(p=>p.id===pid);const pcol=pc(pid);
+        h+=`<td style="background:${pcol}0d${pmB}" draggable="true"
+          ondragstart="dStart(event,'${team.id}','${activeDay}',${hr},'${pid}')" ondragend="dEnd(event)"
+          ondragover="dOverTeam(event,'${team.id}',${hr})" ondragleave="dLeave(event)" ondrop="dDropTeam(event,'${team.id}',${hr})">
+          <div class="chip chip-sm" style="background:${pcol}1a;color:${pcol};border:1px solid ${pcol}38;cursor:grab;overflow:hidden;text-overflow:ellipsis;max-width:76px" title="${post?.name}">${post?.name||pid}</div></td>`;
+      }else if(isBreak){
+        h+=`<td style="text-align:center;background:rgba(245,196,0,.05)${pmB}" ondragover="dOverTeam(event,'${team.id}',${hr})" ondragleave="dLeave(event)" ondrop="dDropTeam(event,'${team.id}',${hr})">
+          <span style="font-size:8px;color:var(--gold);font-family:'Barlow Condensed';font-weight:700">★ PAUZE</span></td>`;
+      }else{
+        h+=`<td style="${pmB}" ondragover="dOverTeam(event,'${team.id}',${hr})" ondragleave="dLeave(event)" ondrop="dDropTeam(event,'${team.id}',${hr})">
+          <span style="font-size:7px;color:var(--text-muted)">—</span></td>`;
+      }
+    });h+='</tr>';
+  });
+  h+='</tbody></table></div>';el.innerHTML=h;
+}
+
+function renderTeamDetail(el){
+  const team=D.teams.find(t=>t.id===filterVal);if(!team)return;const col=tc(team.id);
+  let h=`<div class="card" style="border-color:${col}40"><div class="card-header"><span class="card-title" style="color:${col}">${team.name}</span><span class="badge">${team.members}</span></div><div class="two-day">`;
+  ['friday','saturday'].forEach(day=>{
+    const av=getAv(team,day);const dd=S[day]||{};const hours=Object.keys(dd).map(Number).sort((a,b)=>a-b);const breaks=team.breakPref[day]||[];
+    h+=`<div class="day-card"><h4>${day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06'}</h4>`;
+    if(!av){h+=`<p style="color:var(--text-muted);font-size:11px">Niet aanwezig</p>`;}
+    else{let shifts=0;let pmShown=false;h+='<div style="display:flex;flex-direction:column;gap:2px">';
+      hours.forEach(hr=>{
+        if(hr<av.from||hr>=av.to)return;
+        if(isPM(hr)&&!pmShown){pmShown=true;h+=`<div style="font-size:8px;color:var(--gold);padding:2px 7px;font-family:'Barlow Condensed';font-weight:700">⬥ MIDDERNACHT</div>`;}
+        const pid=Object.keys(dd[hr]||{}).find(p=>(dd[hr][p]||[]).includes(team.id));
+        const acts2=actsForHour(hr,day);
+        const actLabel=acts2.length?`<span style="color:var(--red);font-size:8px;margin-left:auto">🎵 ${acts2[0].name}</span>`:'';
+        if(pid){const post=D.posts.find(p=>p.id===pid);const pcol=pc(pid);shifts++;h+=`<div class="tl-row working" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">${fh(hr)}</span><span class="tl-dot" style="background:${pcol}"></span><span>${post?.name||pid}</span></div>${actLabel}</div>`;}
+        else if(breaks.includes(hr)){h+=`<div class="tl-row onbreak" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">${fh(hr)}</span><span class="tl-dot" style="background:var(--gold)"></span><span style="color:var(--gold)">★ Pauze (voorkeur)</span></div>${actLabel}</div>`;}
+        else{h+=`<div class="tl-row free" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">${fh(hr)}</span><span style="color:var(--text-muted);font-size:9px">— vrij/pauze</span></div>${actLabel}</div>`;}
+      });
+      h+=`</div><p style="margin-top:8px;font-size:11px;font-family:'Barlow Condensed';font-weight:600"><strong style="color:${col}">${shifts} SHIFT${shifts!==1?'S':''}</strong></p>`;}
+    h+='</div>';
+  });
+  h+='</div></div>';el.innerHTML=h;
+}
+function renderPostDetail(el){
+  const post=D.posts.find(p=>p.id===filterVal);if(!post)return;const col=pc(filterVal);
+  let h=`<div class="card" style="border-color:${col}40"><div class="card-header"><span class="card-title" style="color:${col}">${post.name}</span><span class="badge">variabel teams/uur</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">`;
+  ['friday','saturday'].forEach(day=>{
+    const ps=post.schedule[day];const dd=S[day]||{};
+    h+=`<div class="day-card"><h4>${day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06'}</h4>`;
+    if(!ps){h+=`<p style="color:var(--text-muted);font-size:11px">Post niet actief</p>`;}
+    else{h+='<div style="display:flex;flex-direction:column;gap:2px">';let pmShown=false;
+      for(let hr=ps.from;hr<ps.to;hr++){
+        if(isPM(hr)&&!pmShown){pmShown=true;h+=`<div style="font-size:8px;color:var(--gold);padding:2px 7px;font-family:'Barlow Condensed';font-weight:700">⬥ MIDDERNACHT</div>`;}
+        const arr=(dd[hr]?.[post.id])||[];const need=getNeed(post,day,hr);const miss=need-arr.length;
+        const acts2=actsForHour(hr,day);const actStr=acts2.length?`<span style="color:var(--red);font-size:8px;margin-left:auto">🎵 ${acts2[0].name}</span>`:'';
+        h+=`<div style="display:flex;align-items:center;gap:5px;padding:3px 7px;background:var(--bg);border-radius:3px;border:1px solid ${miss>0&&!isOpkuis(post)?'var(--red)':'var(--border)'}">
+          <span style="font-family:'JetBrains Mono';font-size:9px;color:${isPM(hr)?'var(--gold)':'var(--text-dim)'};width:38px;flex-shrink:0">${fh(hr)}</span>
+          <span style="font-size:8px;color:${need===2?'var(--gold)':'var(--text-muted)'};width:12px;flex-shrink:0">${need===2?'②':'①'}</span>
+          <div style="display:flex;gap:2px;flex-wrap:wrap;flex:1">`;
+        if(!arr.length){h+=`<span style="font-size:9px;color:var(--text-muted);font-style:italic">leeg</span>`;}
+        else arr.forEach(tid=>{const tm=D.teams.find(t=>t.id===tid);if(!tm)return;const tcol2=tc(tid);h+=`<span class="chip chip-sm" style="background:${tcol2}18;color:${tcol2};border:1px solid ${tcol2}38" title="${tm.members}">${tm.name}</span>`;});
+        h+=`</div>${actStr}</div>`;
+      }h+='</div>';}
+    h+='</div>';
+  });
+  h+='</div></div>';el.innerHTML=h;
+}
+
+function dStart(ev,tid,day,hour,pid){drag={teamId:tid,day,hour:parseInt(hour),postId:pid};ev.target.classList.add('dragging');ev.dataTransfer.effectAllowed='move';}
+function dEnd(ev){ev.target.classList.remove('dragging');}
+function dOver(ev){ev.preventDefault();ev.currentTarget.classList.add('drop-ok');}
+function dLeave(ev){ev.currentTarget.classList.remove('drop-ok');}
+function dOverTeam(ev,tid,hr){ev.preventDefault();ev.currentTarget.classList.add('drop-ok');}
+
+function performMove(teamId,srcDay,srcHour,srcPost,tgtDay,tgtHour,tgtPost){
+  if(srcDay===tgtDay&&srcHour===tgtHour&&srcPost===tgtPost)return null;
+  const team=D.teams.find(t=>t.id===teamId);const tPost=D.posts.find(p=>p.id===tgtPost);
+  const tps=tPost?.schedule[tgtDay];
+  if(!tps||tgtHour<tps.from||tgtHour>=tps.to)return`"${tPost?.name}" niet actief om ${fh(tgtHour)}`;
+  if(!isAvail(team,tgtDay,tgtHour))return`${team?.name} niet beschikbaar om ${fh(tgtHour)}`;
+  const tNeed=getNeed(tPost,tgtDay,tgtHour);
+  if(!S[tgtDay][tgtHour])S[tgtDay][tgtHour]={};if(!S[tgtDay][tgtHour][tgtPost])S[tgtDay][tgtHour][tgtPost]=[];
+  if(!S[srcDay][srcHour])S[srcDay][srcHour]={};if(!S[srcDay][srcHour][srcPost])S[srcDay][srcHour][srcPost]=[];
+  const srcArr=[...S[srcDay][srcHour][srcPost]];const tgtArr=[...S[tgtDay][tgtHour][tgtPost]];
+  if(tgtArr.includes(teamId))return null;
+  const otherAtTarget=Object.entries(S[tgtDay][tgtHour]||{}).find(([pid,arr])=>{if(pid===tgtPost)return false;if(tgtDay===srcDay&&tgtHour===srcHour&&pid===srcPost)return false;return arr.includes(teamId);});
+  if(otherAtTarget){const op=D.posts.find(p=>p.id===otherAtTarget[0]);return`${team?.name} zou dan op zowel "${op?.name}" als "${tPost?.name}" staan om ${fh(tgtHour)}`;}
+  let swapTeamId=null;
+  if(tgtArr.length>=tNeed){
+    swapTeamId=tgtArr[0];const swpTeam=D.teams.find(t=>t.id===swapTeamId);
+    const swpAv=getAv(swpTeam,srcDay);
+    if(!swpAv||srcHour<swpAv.from||srcHour>=swpAv.to)return`Swap niet mogelijk: ${swpTeam?.name} niet beschikbaar om ${fh(srcHour)}`;
+    const swpOther=Object.entries(S[srcDay][srcHour]||{}).find(([pid,arr])=>{if(pid===srcPost)return false;if(srcDay===tgtDay&&srcHour===tgtHour&&pid===tgtPost)return false;return arr.includes(swapTeamId);});
+    if(swpOther){const op=D.posts.find(p=>p.id===swpOther[0]);return`Swap niet mogelijk: ${swpTeam?.name} staat al op "${op?.name}" om ${fh(srcHour)}`;}
+  }
+  S[srcDay][srcHour][srcPost]=srcArr.filter(t=>t!==teamId);
+  if(swapTeamId){S[tgtDay][tgtHour][tgtPost]=tgtArr.filter(t=>t!==swapTeamId);S[srcDay][srcHour][srcPost]=[...S[srcDay][srcHour][srcPost],swapTeamId];}
+  if(!S[tgtDay][tgtHour][tgtPost].includes(teamId))S[tgtDay][tgtHour][tgtPost]=[...S[tgtDay][tgtHour][tgtPost],teamId];
+  return null;
+}
+function dDrop(ev,day,hour,postId){ev.preventDefault();ev.currentTarget.classList.remove('drop-ok');if(!drag)return;if(!requireEdit())return;const{teamId,day:fd,hour:fhour,postId:fp}=drag;drag=null;const err=performMove(teamId,fd,fhour,fp,day,parseInt(hour),postId);if(err){toast('❌ '+err,'err');return;}renderStats();renderSchedView();renderValidation();scheduleCloudSave();}
+function dDropTeam(ev,tgtTeamId,tgtHour){ev.preventDefault();ev.currentTarget.classList.remove('drop-ok');if(!drag)return;const{teamId,day:srcDay,hour:srcHour,postId:srcPost}=drag;drag=null;const th=parseInt(tgtHour);if(tgtTeamId===teamId)return;const dd=S[activeDay]||{};const tgtPost=Object.keys(dd[th]||{}).find(pid=>(dd[th][pid]||[]).includes(tgtTeamId));if(!tgtPost){toast('⚠️ Sleep naar een post-cel in \'Per Post\' weergave voor vrije vakjes','info');return;}const err=performMove(teamId,srcDay,srcHour,srcPost,activeDay,th,tgtPost);if(err){toast('❌ '+err,'err');return;}renderStats();renderSchedView();renderValidation();scheduleCloudSave();}
+
+function doExportXLS(){
+  if(!S){toast('Geen rooster','err');return;}
+  const RED='#c8101e',GOLD='#f5c400';
+  let html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8">
+<style>body{font-family:Calibri;font-size:8pt;}table{border-collapse:collapse;}th,td{border:1px solid #ccc;padding:3px 5px;vertical-align:top;}
+.rhdr{background:#1a1a1a;color:#fff;font-weight:bold;font-size:8pt;min-width:110px;white-space:nowrap;}
+.hhdr{background:#111;color:#aaa;font-weight:bold;font-size:8pt;text-align:center;white-space:nowrap;min-width:60px;}
+.hhdr.midnight{background:#1a1200;color:${GOLD}!important;border-left:2px solid ${GOLD}!important;}
+.inactive{background:#ececec;}.break-c{background:#fffde0;color:#8a6000;font-size:7pt;text-align:center;}
+</style></head><body>`;
+  ['friday','saturday'].forEach(day=>{
+    const lbl=day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06';
+    const dd=S[day]||{};const hours=Object.keys(dd).map(Number).sort((a,b)=>a-b);
+    html+=`<h2 style="color:${RED};font-family:Calibri;margin:10px 0 4px">${lbl} — POST × UUR</h2><table><thead>`;
+    html+=`<tr><th class="rhdr">POST</th>`;hours.forEach(hr=>{html+=`<th class="hhdr${hr===24?' midnight':''}">${fh(hr)}</th>`;});html+='</tr></thead><tbody>';
+    D.posts.forEach((post,pi)=>{const col=PPAL[pi%PPAL.length];html+=`<tr><td class="rhdr" style="border-left:3px solid ${col};color:${col}">${post.name}</td>`;
+      hours.forEach(hr=>{const ps=post.schedule[day];const active=ps&&hr>=ps.from&&hr<ps.to;if(!active){html+=`<td style="background:#ececec${hr===24?';border-left:2px solid '+GOLD:''}"></td>`;return;}
+        const arr=dd[hr]?.[post.id]||[];const need=getNeed(post,day,hr);const miss=need-arr.length;
+        const bg=need===2?'background:#fff8ee;':'';const bord=miss>0&&!isOpkuis(post)?`border:1.5px solid ${RED};`:'';const pm=hr===24?'border-left:2px solid '+GOLD+';':'';
+        const inner=arr.map(tid=>{const tm=D.teams.find(t=>t.id===tid);if(!tm)return'';const c2=tc(tid);return`<span style="color:${c2};font-weight:bold">${tm.name}</span><br><span style="color:${c2};opacity:.7;font-size:6.5pt">${tm.members}</span>`;}).join('<br>');
+        html+=`<td style="${bg}${bord}${pm}font-size:8pt">${inner||'<span style="color:#888;font-style:italic;font-size:7pt">leeg</span>'}</td>`;});html+='</tr>';});
+    html+='</tbody></table><br>';
+    const lk2={};hours.forEach(hr=>{lk2[hr]={};Object.entries(dd[hr]||{}).forEach(([pid,arr])=>arr.forEach(tid=>{lk2[hr][tid]=pid;}));});
+    const teams2=[...D.teams].sort((a,b)=>a.name.localeCompare(b.name));
+    html+=`<h2 style="color:${RED};font-family:Calibri;margin:10px 0 4px">${lbl} — TEAM × UUR</h2><table><thead>`;
+    html+=`<tr><th class="rhdr">TEAM</th>`;hours.forEach(hr=>{html+=`<th class="hhdr${hr===24?' midnight':''}">${fh(hr)}</th>`;});html+='</tr></thead><tbody>';
+    teams2.forEach(team=>{const col=tc(team.id);html+=`<tr><td class="rhdr" style="border-left:3px solid ${col};color:${col}">${team.name}<br><span style="font-size:6.5pt;opacity:.7;font-weight:normal">${team.members}</span></td>`;
+      hours.forEach(hr=>{const av=getAv(team,day);const inR=av&&hr>=av.from&&hr<av.to;const isBreak=(team.breakPref[day]||[]).includes(hr);const pid=lk2[hr]?.[team.id];const pm=hr===24?'border-left:2px solid '+GOLD+';':'';
+        if(!inR){html+=`<td style="background:#ececec${hr===24?';border-left:2px solid '+GOLD:''}"></td>`;return;}
+        if(pid){const post=D.posts.find(p=>p.id===pid);const pcol=pc(pid);html+=`<td style="background:${pcol}18;color:${pcol};font-weight:bold;font-size:7pt;text-align:center;${pm}">${post?.name||pid}</td>`;}
+        else if(isBreak){html+=`<td class="break-c" style="${pm}">★ Pauze</td>`;}
+        else{html+=`<td style="color:#aaa;text-align:center;font-size:7pt;${pm}">—</td>`;}});html+='</tr>';});
+    html+='</tbody></table><br>';
+  });
+  html+=`<h2 style="color:#c8101e;font-family:Calibri;margin:10px 0 4px">TEAM OVERZICHT</h2><table><thead><tr>
+    <th style="background:#1a1a1a;color:#fff">Team</th><th style="background:#1a1a1a;color:#fff">Leden</th>
+    <th style="background:#1a1a1a;color:#fff">Pauze Vr.</th><th style="background:#1a1a1a;color:#fff">Pauze Za.</th>
+    <th style="background:#1a1a1a;color:#fff"># Vr.</th><th style="background:#1a1a1a;color:#fff"># Za.</th>
+    <th style="background:#1a1a1a;color:#fff">Totaal</th></tr></thead><tbody>`;
+  [...D.teams].sort((a,b)=>a.name.localeCompare(b.name)).forEach(t=>{
+    let fri=0,sat=0;Object.values(S.friday||{}).forEach(hp=>Object.values(hp).forEach(a=>{if(a.includes(t.id))fri++;}));Object.values(S.saturday||{}).forEach(hp=>Object.values(hp).forEach(a=>{if(a.includes(t.id))sat++;}));
+    const col=tc(t.id);
+    html+=`<tr><td style="color:${col};font-weight:bold">${t.name}</td><td style="font-size:8pt">${t.members}</td>
+    <td style="color:${GOLD}">${(t.breakPref.friday||[]).map(h=>fh(h)).join(', ')||'—'}</td>
+    <td style="color:${GOLD}">${(t.breakPref.saturday||[]).map(h=>fh(h)).join(', ')||'—'}</td>
+    <td style="text-align:center">${fri}</td><td style="text-align:center">${sat}</td>
+    <td style="text-align:center;font-weight:bold">${fri+sat}</td></tr>`;
+  });
+  html+='</tbody></table></body></html>';
+  const blob=new Blob([html],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='grensrock-rooster.xls';a.click();toast('✅ Excel geëxporteerd!','ok');
+}
+
+function doExportPDF(){
+  if(!S){toast('Geen rooster','err');return;}
+  const RED='#c8101e',GOLD='#f5c400';
+  function buildPage(day,viewType){
+    const dd=S[day]||{};const hours=Object.keys(dd).map(Number).sort((a,b)=>a-b);
+    const dayLabel=day==='friday'?'VRIJDAG 26 JUNI':'ZATERDAG 27 JUNI';
+    const viewLabel=viewType==='post'?'POST × UUR':'TEAM × UUR';
+    let t=`<div class="day-page"><div class="ph"><div class="ph-logo">GRENSROCK <span>2026</span></div><div class="ph-day">${dayLabel}</div><div class="ph-view">${viewLabel}</div></div><table><thead>`;
+    t+=`<tr><th class="rh">${viewType==='post'?'POST':'TEAM'}</th>`;
+    hours.forEach(hr=>{t+=`<th class="${hr===24?'mh':'hh'}">${fh(hr)}</th>`;});
+    t+='</tr></thead><tbody>';
+    if(viewType==='post'){
+      D.posts.forEach((post,pi)=>{const col=PPAL[pi%PPAL.length];const opk=isOpkuis(post);t+=`<tr><td class="rh" style="border-left:3px solid ${col};color:${col};font-weight:700;font-size:7pt">${post.name}</td>`;
+        hours.forEach(hr=>{const ps=post.schedule[day];const active=ps&&hr>=ps.from&&hr<ps.to;const pm=hr===24;if(!active){t+=`<td style="background:#f0f0f0${pm?';border-left:2px solid '+GOLD:''}"></td>`;return;}
+          const arr=dd[hr]?.[post.id]||[];const need=getNeed(post,day,hr);const miss=need-arr.length;
+          const bg=need===2?'background:#fffbec':'';const bord=miss>0&&!opk?`border:1.5px solid ${RED}`:'';const pmB=pm?'border-left:2px solid '+GOLD:'';
+          const inner=arr.map(tid=>{const tm=D.teams.find(t=>t.id===tid);if(!tm)return'';const c2=tc(tid);return`<div style="color:${c2};font-weight:700;font-size:6pt;line-height:1.2">${tm.name}</div><div style="color:${c2};font-size:5pt;opacity:.8">${tm.members}</div>`;}).join('');
+          t+=`<td style="${bg};${bord};${pmB}">${inner||'<span style="color:#ccc;font-size:5pt;font-style:italic">leeg</span>'}</td>`;});t+='</tr>';});
+    }else{
+      const lk2={};hours.forEach(hr=>{lk2[hr]={};Object.entries(dd[hr]||{}).forEach(([pid,arr])=>arr.forEach(tid=>{lk2[hr][tid]=pid;}));});
+      [...D.teams].sort((a,b)=>a.name.localeCompare(b.name)).forEach(team=>{const col=tc(team.id);t+=`<tr><td class="rh" style="border-left:3px solid ${col};color:${col}"><div style="font-weight:700;font-size:7pt">${team.name}</div><div style="font-size:5.5pt;opacity:.7">${team.members}</div></td>`;
+        hours.forEach(hr=>{const av=getAv(team,day);const inR=av&&hr>=av.from&&hr<av.to;const isBreak=(team.breakPref[day]||[]).includes(hr);const pid=lk2[hr]?.[team.id];const pm=hr===24?'border-left:2px solid '+GOLD:'';
+          if(!inR){t+=`<td style="background:#f0f0f0;${pm}"></td>`;return;}
+          if(pid){const post=D.posts.find(p=>p.id===pid);const pcol=pc(pid);t+=`<td style="background:${pcol}20;color:${pcol};font-weight:700;font-size:6.5pt;text-align:center;${pm}">${post?.name||pid}</td>`;}
+          else if(isBreak){t+=`<td style="background:#fffde0;color:#8a6000;font-size:6pt;text-align:center;${pm}">★ Pauze</td>`;}
+          else{t+=`<td style="color:#ccc;text-align:center;font-size:6pt;${pm}">—</td>`;}});t+='</tr>';});
+    }
+    return t+'</tbody></table></div>';
+  }
+  const css=`<style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#fff;font-family:Calibri,Arial,sans-serif;}
+.day-page{padding:5mm;page-break-after:always;}.day-page:last-child{page-break-after:auto;}
+.ph{display:flex;align-items:baseline;gap:10px;margin-bottom:5px;border-bottom:3px solid ${RED};padding-bottom:4px;}
+.ph-logo{font-family:Arial Black,sans-serif;font-size:14pt;font-weight:900;color:#111;letter-spacing:2px;}.ph-logo span{color:${RED};}
+.ph-day{font-family:Arial Black,sans-serif;font-size:11pt;font-weight:900;color:${RED};flex:1;}
+.ph-view{font-size:7pt;color:#666;font-weight:700;letter-spacing:1px;text-transform:uppercase;}
+table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:2px 3px;vertical-align:top;}
+.rh{background:#1a1a1a;color:#fff;font-size:7pt;font-weight:bold;white-space:nowrap;min-width:90px;max-width:120px;}
+.hh{background:#f5f5f5;color:#666;font-size:7pt;font-weight:bold;text-align:center;white-space:nowrap;min-width:52px;}
+.mh{background:#fffae0;color:#8a6000;font-size:7pt;font-weight:bold;text-align:center;white-space:nowrap;border-left:2px solid ${GOLD};min-width:52px;}
+@page{size:A3 landscape;margin:4mm;}@media print{.day-page{padding:3mm;}}</style>`;
+  const pa=document.getElementById('print-area');
+  pa.innerHTML=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Grensrock 2026</title>${css}</head><body>`+buildPage('friday','post')+buildPage('friday','team')+buildPage('saturday','post')+buildPage('saturday','team')+'</body></html>';
+  pa.style.display='block';
+  requestAnimationFrame(()=>{window.print();const cleanup=()=>{pa.innerHTML='';pa.style.display='none';};window.addEventListener('afterprint',cleanup,{once:true});setTimeout(cleanup,30000);});
+  toast('🖨 PDF afdrukvenster geopend (4 pagina\'s)','info');
+}
+
+function dlTemplate(){
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([
+    ['Team','Leden','Vrijdag_Van','Vrijdag_Tot','Zaterdag_Van','Zaterdag_Tot','Voorkeur_Post','Voorkeur_Collega','Pauze_Vrijdag','Pauze_Zaterdag'],
+    ['Alpha','Jan Janssen, Piet Pieters','begin','einde',14,'einde','Ingang, Frontstage','Bravo','21','22,24'],
+    ['Bravo','Lisa Van Den Berg, Tom Smeets',19,'einde',12,25,'Ingang','Alpha','22,23',''],
+    ['Charlie','Sara Claes, Koen Leclercq','begin',25,12,24,'VIP','','','20,23'],
+    ['Delta','Nina Willems, Marc Hermans',20,'einde',14,'einde','','','',''],
+  ]),'Teams');
+  XLSX.writeFile(wb,'grensrock-template.xlsx');toast('📥 Template gedownload!','ok');
+}
+
+function publishRooster(){
+  if(!S){toast('⚠️ Geen rooster om te publiceren','err');return;}
+  try{
+    const payload={D:D,S:S,ts:new Date().toISOString()};
+    const dataJSON=JSON.stringify(payload);
+    const pubHTML=buildPublishedHTML(dataJSON);
+    const blob=new Blob([pubHTML],{type:'text/html;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='rooster-teams-gepubliceerd.html';a.click();
+    toast('📤 Teamrooster gedownload!','ok');
+  }catch(e){toast('❌ Fout: '+e.message,'err');}
+}
+
+function buildPublishedHTML(dataJSON){
+  return`<!DOCTYPE html><html lang="nl"><head><meta charset="UTF-8"><title>Grensrock 2026 Teamrooster</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>:root{--bg:#080808;--surface:#0f0f0f;--card:#181818;--border:#252525;--border-hi:#383838;--red:#c8101e;--gold:#f5c400;--green:#4caf6e;--text:#f0ece6;--text-dim:#7a7068;--text-muted:#2e2e2e;}
+*{margin:0;padding:0;box-sizing:border-box;}body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;}
+header{background:#0b0b0b;border-bottom:3px solid var(--red);padding:0 22px;height:62px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:300;}
+.logo{font-family:'Anton',sans-serif;font-size:19px;letter-spacing:4px;color:#fff;}.logo span{color:var(--red);}
+.logo-sub{font-size:10px;letter-spacing:2px;color:#888;font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;}
+.pill-tabs{display:flex;gap:2px;background:var(--surface);padding:3px;border-radius:5px;border:1px solid var(--border);}
+.pill-tab{padding:5px 12px;border-radius:3px;border:none;background:transparent;color:var(--text-dim);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;}
+.pill-tab.active{background:var(--red);color:#fff;}
+.filter-select{background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:5px 9px;font-family:'Barlow Condensed',sans-serif;font-size:11px;cursor:pointer;outline:none;font-weight:600;}
+.sched-header{display:flex;align-items:center;gap:7px;margin-bottom:11px;flex-wrap:wrap;}
+.sched-wrap{overflow:auto;border-radius:8px;border:1px solid var(--border);max-height:calc(100vh - 145px);}
+.sched-grid{border-collapse:collapse;}
+.sched-grid th{background:var(--surface);padding:8px 9px;text-align:center;font-size:9px;font-family:'Barlow Condensed',sans-serif;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text-dim);border-bottom:2px solid var(--border);border-right:1px solid var(--border);position:sticky;top:0;z-index:4;white-space:nowrap;min-width:80px;}
+.sched-grid th.row-h{text-align:left;min-width:130px;max-width:160px;border-right:2px solid var(--border-hi);left:0;z-index:5;}
+.sched-grid td.row-h{position:sticky;left:0;z-index:2;background:var(--surface);border-right:2px solid var(--border-hi);padding:5px 10px;min-width:130px;max-width:160px;vertical-align:middle;}
+.sched-grid td{border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:3px 5px;vertical-align:top;}
+.sched-grid td.inactive{background:repeating-linear-gradient(45deg,#050505,#050505 3px,#0a0a0a 3px,#0a0a0a 6px);}
+.cell-content{display:flex;flex-direction:column;gap:2px;min-height:26px;padding:2px;}
+.chip{display:inline-flex;flex-direction:column;padding:3px 6px;border-radius:4px;font-family:'Barlow Condensed',sans-serif;border:1px solid transparent;line-height:1.2;width:100%;}
+.chip-name{font-size:10px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;}
+.chip-members{font-size:8px;font-weight:400;opacity:.72;font-family:'Barlow',sans-serif;}
+.chip-sm{font-size:9px;padding:2px 6px;font-weight:700;flex-direction:row;align-items:center;width:auto;white-space:nowrap;}
+.empty-slot{height:22px;border-radius:3px;border:1px dashed var(--text-muted);opacity:.3;margin:1px 0;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:17px;margin-bottom:15px;}
+.two-day{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
+.day-card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:13px;}
+.day-card h4{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:9px;}
+.tl-row{display:flex;align-items:center;gap:7px;padding:3px 7px;border-radius:4px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;}
+.tl-row.working{background:rgba(200,16,30,.06);border:1px solid rgba(200,16,30,.12);}
+.tl-row.onbreak{background:rgba(245,196,0,.06);border:1px solid rgba(245,196,0,.12);}
+.tl-row.free{opacity:.38;}
+.tl-hour{width:42px;color:var(--text-dim);flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:9px;}
+.tl-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.badge{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2px 9px;font-size:10px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;}
+main{padding:20px 22px;max-width:1700px;margin:0 auto;}
+</style></head><body>
+<header>
+<div><div class="logo">TEAM<span>ROOSTER</span></div><div class="logo-sub">Menen · 26 &amp; 27 juni 2026</div></div>
+<div id="hdr-controls" class="sched-header" style="margin:0"></div>
+<div id="ts-info" style="font-size:10px;color:var(--text-dim);font-family:'Barlow Condensed'"></div>
+</header>
+<main><div id="sched-view"></div></main>
+<script>
+var DATA=${dataJSON};
+var D=DATA.D,S=DATA.S;
+var TPAL=["#c8101e","#e88c00","#4fc3f7","#66bb6a","#e040fb","#ff8a65","#26c6da","#aed581","#ef5350","#42a5f5","#ffca28","#26a69a","#ec407a","#7e57c2","#4caf6e","#ffa726","#29b6f6","#cddc39","#ff7043","#5c6bc0","#4dd0e1","#f06292","#8d6e63","#78909c","#a5d6a7"];
+var PPAL=["#c8101e","#e88c00","#4fc3f7","#4caf6e","#ff4d6d","#b967ff","#00e5a0","#ff9f43","#26c6da","#f06292","#cddc39","#ffd740","#e57373"];
+var activeDay='friday',activeView='post',filterType='all',filterVal=null;
+var tc=function(id){var i=D.teams.findIndex(function(t){return t.id===id;});return TPAL[i%TPAL.length]||'#888';};
+var pc=function(id){var i=D.posts.findIndex(function(p){return p.id===id;});return PPAL[i%PPAL.length]||'#888';};
+var fh=function(h){var n=((h%24)+24)%24;return String(n).padStart(2,'0')+':00';};
+var fm=function(h,m){var n=((h%24)+24)%24;return String(n).padStart(2,'0')+':'+String(m||0).padStart(2,'0');};
+var isPM=function(h){return h>=24;};
+var isOpkuis=function(p){return p.name.toLowerCase().includes('opkuis');};
+function resolveHour(val,day,type){if(val==='begin'){var hrs=D.posts.flatMap(function(p){return p.schedule[day]?[p.schedule[day].from]:[];});return hrs.length?Math.min.apply(null,hrs):0;}if(val==='einde'){var hrs2=D.posts.flatMap(function(p){return p.schedule[day]?[p.schedule[day].to]:[];});return hrs2.length?Math.max.apply(null,hrs2):30;}var n=parseInt(val);return isNaN(n)?type==='from'?0:30:n;}
+function getAv(team,day){var av=team.availability[day];if(!av)return null;return{from:resolveHour(av.from,day,'from'),to:resolveHour(av.to,day,'to')};}
+function getNeed(post,day,hr){var n=post.needPerHour&&post.needPerHour[day]?post.needPerHour[day][hr]:undefined;return n!==undefined?n:1;}
+function actsForHour(hr,day){return(D.timetable[day]||[]).filter(function(a){var f=a.fromH+a.fromMin/60,t=a.toH+a.toMin/60;return f<hr+1&&t>hr;});}
+function switchDay(d){activeDay=d;document.getElementById('dt-fri').classList.toggle('active',d==='friday');document.getElementById('dt-sat').classList.toggle('active',d==='saturday');renderView();}
+function switchView(v){activeView=v;document.getElementById('vt-post').classList.toggle('active',v==='post');document.getElementById('vt-team').classList.toggle('active',v==='team');renderView();}
+function onFilterType(){filterType=document.getElementById('flt-type').value;var fv=document.getElementById('flt-val');if(filterType==='team'){fv.style.display='';fv.innerHTML=D.teams.map(function(t){return'<option value="'+t.id+'">'+t.name+'</option>';}).join('');filterVal=D.teams[0]?D.teams[0].id:null;}else if(filterType==='post'){fv.style.display='';fv.innerHTML=D.posts.map(function(p){return'<option value="'+p.id+'">'+p.name+'</option>';}).join('');filterVal=D.posts[0]?D.posts[0].id:null;}else{fv.style.display='none';filterVal=null;}renderView();}
+function onFilterVal(){filterVal=document.getElementById('flt-val').value;renderView();}
+function renderView(){if(filterType==='team'&&filterVal){renderTeamDetail();}else if(filterType==='post'&&filterVal){renderPostDetail();}else if(activeView==='post'){renderGridPost();}else{renderGridTeam();}}
+function buildGH(hours,label){var h='<thead><tr><th class="row-h" style="position:sticky;top:0;left:0;z-index:5">'+label+'</th>';hours.forEach(function(hr){h+='<th style="'+(hr===24?'border-left:2px solid rgba(245,196,0,.5);color:var(--gold)':'')+'">'+(isPM(hr)?'<span style="color:var(--gold)">':'')+fh(hr)+(isPM(hr)?'</span>':'')+'</th>';});return h+'</tr></thead>';}
+function renderGridPost(){var dd=S[activeDay]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var el=document.getElementById('sched-view');if(!hours.length){el.innerHTML='<p style="padding:40px;color:var(--text-dim)">Geen shifts</p>';return;}var h='<div class="sched-wrap"><table class="sched-grid">'+buildGH(hours,'POST')+'<tbody>';D.posts.forEach(function(post,pi){var col=PPAL[pi%PPAL.length];var opk=isOpkuis(post);h+='<tr><td class="row-h" style="border-left:3px solid '+col+(opk?';background:rgba(245,196,0,.06)':'')+'">'+'<div style="color:'+col+';font-family:Barlow Condensed;font-size:11px;font-weight:800;text-transform:uppercase">'+post.name+'</div>'+(opk?'<div style="font-size:8px;color:var(--gold);font-weight:700">ALLE TEAMS</div>':'')+'</td>';hours.forEach(function(hr){var ps=post.schedule[activeDay];var active=ps&&hr>=ps.from&&hr<ps.to;var pm=hr===24;if(!active){h+='<td class="inactive" style="'+(pm?'border-left:2px solid rgba(245,196,0,.3)':'')+'"></td>';return;}var assigned=(dd[hr]&&dd[hr][post.id])?dd[hr][post.id]:[];var need=getNeed(post,activeDay,hr);h+='<td style="background:'+(need===2?'rgba(200,16,30,.04)':opk?'rgba(245,196,0,.03)':'transparent')+(pm?';border-left:2px solid rgba(245,196,0,.3)':'')+'">'+'<div class="cell-content">';for(var s=0;s<(opk?assigned.length:need);s++){if(s<assigned.length){var tid=assigned[s];var tm=D.teams.find(function(t){return t.id===tid;});if(!tm)continue;var c2=tc(tid);h+='<div class="chip" style="background:'+c2+'18;border-color:'+c2+'42"><span class="chip-name" style="color:'+c2+'">'+tm.name+'</span><span class="chip-members" style="color:'+c2+'">'+tm.members+'</span></div>';}else h+='<div class="empty-slot"></div>';}h+='</div></td>';});h+='</tr>';});h+='</tbody></table></div>';el.innerHTML=h;}
+function renderGridTeam(){var dd=S[activeDay]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var el=document.getElementById('sched-view');if(!hours.length){el.innerHTML='<p style="padding:40px;color:var(--text-dim)">Geen shifts</p>';return;}var lk={};hours.forEach(function(hr){lk[hr]={};Object.entries(dd[hr]||{}).forEach(function(e){e[1].forEach(function(tid){lk[hr][tid]=e[0];});});});var teams=[].concat(D.teams).sort(function(a,b){return a.name.localeCompare(b.name);});var h='<div class="sched-wrap"><table class="sched-grid">'+buildGH(hours,'TEAM')+'<tbody>';teams.forEach(function(team){var col=tc(team.id);h+='<tr><td class="row-h" style="border-left:3px solid '+col+'"><div style="color:'+col+';font-weight:800;font-size:11px;text-transform:uppercase">'+team.name+'</div><div style="color:'+col+';font-size:8px;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:125px">'+team.members+'</div></td>';hours.forEach(function(hr){var av=getAv(team,activeDay);var inR=av&&hr>=av.from&&hr<av.to;var isBreak=(team.breakPref[activeDay]||[]).indexOf(hr)>=0;var pid=lk[hr]?lk[hr][team.id]:null;var pm=hr===24?';border-left:2px solid rgba(245,196,0,.3)':'';if(!inR){h+='<td class="inactive" style="'+(hr===24?'border-left:2px solid rgba(245,196,0,.3)':'')+'"></td>';return;}if(pid){var post=D.posts.find(function(p){return p.id===pid;});var pcol=pc(pid);h+='<td style="background:'+pcol+'0d'+pm+'"><div class="chip chip-sm" style="background:'+pcol+'1a;color:'+pcol+';border:1px solid '+pcol+'38;overflow:hidden;text-overflow:ellipsis;max-width:76px">'+(post?post.name:pid)+'</div></td>';}else if(isBreak){h+='<td style="text-align:center;background:rgba(245,196,0,.05)'+pm+'"><span style="font-size:8px;color:var(--gold);font-weight:700">★ PAUZE</span></td>';}else{h+='<td style="'+pm+'"><span style="font-size:7px;color:var(--text-muted)">—</span></td>';}});h+='</tr>';});h+='</tbody></table></div>';el.innerHTML=h;}
+function renderTeamDetail(){var team=D.teams.find(function(t){return t.id===filterVal;});if(!team)return;var col=tc(team.id);var el=document.getElementById('sched-view');var h='<div class="card" style="border-color:'+col+'40"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-family:Anton;font-size:11px;letter-spacing:2px;color:'+col+';text-transform:uppercase">'+team.name+'</span><span class="badge">'+team.members+'</span></div><div class="two-day">';['friday','saturday'].forEach(function(day){var av=getAv(team,day);var dd=S[day]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var breaks=team.breakPref[day]||[];h+='<div class="day-card"><h4>'+(day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06')+'</h4>';if(!av){h+='<p style="color:var(--text-muted);font-size:11px">Niet aanwezig</p>';}else{var shifts=0;var pmShown=false;h+='<div style="display:flex;flex-direction:column;gap:2px">';hours.forEach(function(hr){if(hr<av.from||hr>=av.to)return;if(isPM(hr)&&!pmShown){pmShown=true;h+='<div style="font-size:8px;color:var(--gold);padding:2px 7px;font-weight:700">⬥ MIDDERNACHT</div>';}var pid=Object.keys(dd[hr]||{}).find(function(p){return(dd[hr][p]||[]).indexOf(team.id)>=0;});var acts2=actsForHour(hr,day);var actLabel=acts2.length?'<span style="color:var(--red);font-size:8px;margin-left:auto">🎵 '+acts2[0].name+'</span>':'';if(pid){var post=D.posts.find(function(p){return p.id===pid;});var pcol=pc(pid);shifts++;h+='<div class="tl-row working" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">'+fh(hr)+'</span><span class="tl-dot" style="background:'+pcol+'"></span><span>'+(post?post.name:pid)+'</span></div>'+actLabel+'</div>';}else if(breaks.indexOf(hr)>=0){h+='<div class="tl-row onbreak" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">'+fh(hr)+'</span><span class="tl-dot" style="background:var(--gold)"></span><span style="color:var(--gold)">★ Pauze</span></div>'+actLabel+'</div>';}else{h+='<div class="tl-row free" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">'+fh(hr)+'</span><span style="color:var(--text-muted);font-size:9px">— vrij/pauze</span></div>'+actLabel+'</div>';}});h+='</div><p style="margin-top:8px;font-size:11px;font-weight:600"><strong style="color:'+col+'">'+shifts+' SHIFT'+(shifts!==1?'S':'')+'</strong></p>';}h+='</div>';});h+='</div></div>';el.innerHTML=h;}
+function renderPostDetail(){var post=D.posts.find(function(p){return p.id===filterVal;});if(!post)return;var col=pc(filterVal);var el=document.getElementById('sched-view');var h='<div class="card" style="border-color:'+col+'40"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-family:Anton;font-size:11px;letter-spacing:2px;color:'+col+';text-transform:uppercase">'+post.name+'</span><span class="badge">variabel teams/uur</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">';['friday','saturday'].forEach(function(day){var ps=post.schedule[day];var dd=S[day]||{};h+='<div class="day-card"><h4>'+(day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06')+'</h4>';if(!ps){h+='<p style="color:var(--text-muted);font-size:11px">Post niet actief</p>';}else{h+='<div style="display:flex;flex-direction:column;gap:2px">';var pmShown=false;for(var hr=ps.from;hr<ps.to;hr++){if(isPM(hr)&&!pmShown){pmShown=true;h+='<div style="font-size:8px;color:var(--gold);padding:2px 7px;font-weight:700">⬥ MIDDERNACHT</div>';}var arr=(dd[hr]&&dd[hr][post.id])?dd[hr][post.id]:[];var need=getNeed(post,day,hr);var miss=need-arr.length;var acts2=actsForHour(hr,day);var actStr=acts2.length?'<span style="color:var(--red);font-size:8px;margin-left:auto">🎵 '+acts2[0].name+'</span>':'';h+='<div style="display:flex;align-items:center;gap:5px;padding:3px 7px;background:var(--bg);border-radius:3px;border:1px solid '+(miss>0&&!isOpkuis(post)?'var(--red)':'var(--border)')+'"><span style="font-family:JetBrains Mono;font-size:9px;color:'+(isPM(hr)?'var(--gold)':'var(--text-dim)')+';width:38px;flex-shrink:0">'+fh(hr)+'</span><span style="font-size:8px;color:'+(need===2?'var(--gold)':'var(--text-muted)')+';width:12px;flex-shrink:0">'+(need===2?'②':'①')+'</span><div style="display:flex;gap:2px;flex-wrap:wrap;flex:1">';if(!arr.length){h+='<span style="font-size:9px;color:var(--text-muted);font-style:italic">leeg</span>';}else{arr.forEach(function(tid){var tm=D.teams.find(function(t){return t.id===tid;});if(!tm)return;var tcol2=TPAL[D.teams.indexOf(tm)%TPAL.length];h+='<span class="chip chip-sm" style="background:'+tcol2+'18;color:'+tcol2+';border:1px solid '+tcol2+'38">'+tm.name+'</span>';});}h+='</div>'+actStr+'</div>';}h+='</div>';}h+='</div>';});h+='</div></div>';el.innerHTML=h;}
+document.getElementById('hdr-controls').innerHTML='<div class="pill-tabs"><button class="pill-tab active" onclick="switchDay(\'friday\')" id="dt-fri">Vrijdag</button><button class="pill-tab" onclick="switchDay(\'saturday\')" id="dt-sat">Zaterdag</button></div>'+'<div class="pill-tabs"><button class="pill-tab active" onclick="switchView(\'post\')" id="vt-post">Per Post</button><button class="pill-tab" onclick="switchView(\'team\')" id="vt-team">Per Team</button></div>'+'<div style="display:flex;align-items:center;gap:5px"><span style="font-size:10px;color:var(--text-dim);font-family:Barlow Condensed;text-transform:uppercase">Filter:</span><select class="filter-select" id="flt-type" onchange="onFilterType()"><option value="all">Alles</option><option value="team">Team</option><option value="post">Post</option></select><select class="filter-select" id="flt-val" style="display:none" onchange="onFilterVal()"></select></div>';
+var ts=new Date(DATA.ts);document.getElementById('ts-info').textContent='Gepubliceerd '+ts.toLocaleDateString('nl-BE')+' '+ts.toLocaleTimeString('nl-BE');
+renderView();
+<\/script></body></html>`;
+}
+
+function toast(msg,type='ok'){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';setTimeout(()=>t.classList.remove('show'),4000);}
+
+(async function init(){
+  mountLoginBar();
+  if(sb){
+    sb.auth.onAuthStateChange((_e,session)=>{ editMode=!!session; userEmail=session?session.user.email:''; setEditUI(); });
+    try{ const {data:{session}}=await sb.auth.getSession(); editMode=!!session; userEmail=session?session.user.email:''; }catch(e){}
+  }
+  setEditUI();
+  const cloud=await cloudLoad();
+  let loaded=false;
+  if(cloud&&(Array.isArray(cloud.teams)||Array.isArray(cloud.posts))) loaded=applyState(cloud);
+  if(!loaded){ const hasSaved=loadPersistent(); if(!hasSaved)initDefaultPostsAndTimetable(); }
+  subscribeRealtime();
+  renderEverything();
+})();
