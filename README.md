@@ -30,8 +30,10 @@ ingelogde gebruikers kunnen bewerken. Wijzigingen syncen live naar andere toeste
 
 ## Push-commands
 ```bash
-cd "<deze map>"
-git remote add origin https://github.com/seys-cloud/Grensrock-stewards.git
+git init
 git branch -M main
+git add -A
+git commit -m "Steward planner: Supabase online opslag + realtime"
+git remote add origin https://github.com/seys-cloud/Grensrock-stewards.git
 git push -u origin main
 ```

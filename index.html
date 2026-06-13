@@ -8,8 +8,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#080808;--surface:#0f0f0f;--card:#181818;--card-hi:#222;--border:#252525;--border-hi:#383838;--red:#c8101e;--red-hi:#e0141f;--red-glow:rgba(200,16,30,.22);--gold:#f5c400;--blue:#4fc3f7;--green:#4caf6e;--orange:#ff6b35;--text:#f0ece6;--text-dim:#7a7068;--text-muted:#2e2e2e;--hdr-bg:#0b0b0b;}
-body.light{--bg:#f5f2ec;--surface:#ebe7df;--card:#ffffff;--card-hi:#f5f0e8;--border:#d5cfc5;--border-hi:#c0b8ae;--text:#1a1410;--text-dim:#5a5248;--text-muted:#b0a898;--hdr-bg:#1a0a08;}
+:root{--bg:#080808;--surface:#0f0f0f;--card:#181818;--card-hi:#222;--border:#252525;--border-hi:#383838;--red:#ff2bd6;--red-hi:#ff5ce0;--red-glow:rgba(255,43,214,.22);--gold:#ffd11a;--blue:#34d6ff;--green:#27e06a;--orange:#ff5a1f;--text:#f0ece6;--text-dim:#7a7068;--text-muted:#2e2e2e;--hdr-bg:#0b0b0b;}
+body.light{--bg:#f5f2ec;--red:#d6168f;--red-hi:#e0148c;--red-glow:rgba(214,22,143,.18);--surface:#ebe7df;--card:#ffffff;--card-hi:#f5f0e8;--border:#d5cfc5;--border-hi:#c0b8ae;--text:#1a1410;--text-dim:#5a5248;--text-muted:#b0a898;--hdr-bg:#1a0a08;}
 body.light .sched-grid th{background:var(--surface)!important;}
 body.light .sched-grid td.row-h,body.light .sched-grid th.row-h{background:var(--surface)!important;}
 body.light .sched-grid td.inactive{background:repeating-linear-gradient(45deg,#e8e4dc,#e8e4dc 3px,#ddd8ce 3px,#ddd8ce 6px)!important;}
@@ -343,8 +343,8 @@ let activeDay='friday',activeView='post',filterType='all',filterVal=null,statSor
 let drag=null,modalMode=null,modalId=null,modalDay=null;
 let darkMode=true;
 
-const TPAL=['#c8101e','#e88c00','#4fc3f7','#66bb6a','#e040fb','#ff8a65','#26c6da','#aed581','#ef5350','#42a5f5','#ffca28','#26a69a','#ec407a','#7e57c2','#4caf6e','#ffa726','#29b6f6','#cddc39','#ff7043','#5c6bc0','#4dd0e1','#f06292','#8d6e63','#78909c','#a5d6a7'];
-const PPAL=['#c8101e','#e88c00','#4fc3f7','#4caf6e','#ff4d6d','#b967ff','#00e5a0','#ff9f43','#26c6da','#f06292','#cddc39','#ffd740','#e57373'];
+const TPAL=['#ff2bd6','#34d6ff','#27e06a','#b6ff1a','#f2ff1a','#ff5a1f','#c850ff','#7d8cff','#ffd11a','#ff9a1f','#00e5a0','#ff4d6d','#4dd0e1','#b967ff','#f06292','#cddc39','#26c6da','#a5d6a7','#ffa726','#5c6bc0','#ec407a','#66bb6a','#29b6f6','#8d6e63','#78909c'];
+const PPAL=['#ff2bd6','#34d6ff','#27e06a','#b6ff1a','#f2ff1a','#ff5a1f','#c850ff','#7d8cff','#ffd11a','#00e5a0','#ff4d6d','#b967ff','#cddc39'];
 const LS_POSTS='gr_posts_v2',LS_TT='gr_timetable_v2';
 
 /* ===== Supabase online opslag (Grensrock steward planner) ===== */
@@ -390,10 +390,10 @@ async function doLoginToggle(){ if(!sb){ toast('Supabase niet geladen','err'); r
 function mountLoginBar(){
   const bar=document.createElement('div');
   bar.style.cssText='position:fixed;top:8px;right:10px;z-index:9999;display:flex;gap:8px;align-items:center;font:600 12px/1 Barlow Condensed,sans-serif';
-  bar.innerHTML='<span id="sync-badge" style="color:var(--text-dim,#999)"></span><button id="login-btn" onclick="doLoginToggle()" style="cursor:pointer;padding:6px 10px;border-radius:8px;border:1px solid var(--gold,#f5c400);background:transparent;color:var(--gold,#f5c400);font:inherit">🔒 Inloggen</button>';
+  bar.innerHTML='<span id="sync-badge" style="color:var(--text-dim,#999)"></span><button id="login-btn" onclick="doLoginToggle()" style="cursor:pointer;padding:6px 10px;border-radius:8px;border:1px solid var(--gold,#ffd11a);background:transparent;color:var(--gold,#ffd11a);font:inherit">🔒 Inloggen</button>';
   document.body.appendChild(bar);
   const banner=document.createElement('div'); banner.id='ro-banner';
-  banner.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9998;background:rgba(17,17,17,.85);backdrop-filter:blur(4px);color:#fff;text-align:center;padding:7px;font:600 12px Barlow Condensed,sans-serif;border-top:1px solid #f5c40055';
+  banner.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9998;background:rgba(17,17,17,.85);backdrop-filter:blur(4px);color:#fff;text-align:center;padding:7px;font:600 12px Barlow Condensed,sans-serif;border-top:1px solid #ff2bd655';
   banner.textContent='👁️ Alleen-lezen weergave — log in om te bewerken';
   document.body.appendChild(banner); }
 /* ===== einde Supabase blok ===== */
@@ -961,7 +961,7 @@ function dDropTeam(ev,tgtTeamId,tgtHour){ev.preventDefault();ev.currentTarget.cl
 
 function doExportXLS(){
   if(!S){toast('Geen rooster','err');return;}
-  const RED='#c8101e',GOLD='#f5c400';
+  const RED='#d6168f',GOLD='#f5c400';
   let html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8">
 <style>body{font-family:Calibri;font-size:8pt;}table{border-collapse:collapse;}th,td{border:1px solid #ccc;padding:3px 5px;vertical-align:top;}
 .rhdr{background:#1a1a1a;color:#fff;font-weight:bold;font-size:8pt;min-width:110px;white-space:nowrap;}
@@ -993,7 +993,7 @@ function doExportXLS(){
         else{html+=`<td style="color:#aaa;text-align:center;font-size:7pt;${pm}">—</td>`;}});html+='</tr>';});
     html+='</tbody></table><br>';
   });
-  html+=`<h2 style="color:#c8101e;font-family:Calibri;margin:10px 0 4px">TEAM OVERZICHT</h2><table><thead><tr>
+  html+=`<h2 style="color:#d6168f;font-family:Calibri;margin:10px 0 4px">TEAM OVERZICHT</h2><table><thead><tr>
     <th style="background:#1a1a1a;color:#fff">Team</th><th style="background:#1a1a1a;color:#fff">Leden</th>
     <th style="background:#1a1a1a;color:#fff">Pauze Vr.</th><th style="background:#1a1a1a;color:#fff">Pauze Za.</th>
     <th style="background:#1a1a1a;color:#fff"># Vr.</th><th style="background:#1a1a1a;color:#fff"># Za.</th>
@@ -1014,7 +1014,7 @@ function doExportXLS(){
 
 function doExportPDF(){
   if(!S){toast('Geen rooster','err');return;}
-  const RED='#c8101e',GOLD='#f5c400';
+  const RED='#d6168f',GOLD='#f5c400';
   function buildPage(day,viewType){
     const dd=S[day]||{};const hours=Object.keys(dd).map(Number).sort((a,b)=>a-b);
     const dayLabel=day==='friday'?'VRIJDAG 26 JUNI':'ZATERDAG 27 JUNI';
@@ -1086,7 +1086,7 @@ function publishRooster(){
 function buildPublishedHTML(dataJSON){
   return`<!DOCTYPE html><html lang="nl"><head><meta charset="UTF-8"><title>Grensrock 2026 Teamrooster</title>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>:root{--bg:#080808;--surface:#0f0f0f;--card:#181818;--border:#252525;--border-hi:#383838;--red:#c8101e;--gold:#f5c400;--green:#4caf6e;--text:#f0ece6;--text-dim:#7a7068;--text-muted:#2e2e2e;}
+<style>:root{--bg:#080808;--surface:#0f0f0f;--card:#181818;--border:#252525;--border-hi:#383838;--red:#ff2bd6;--gold:#ffd11a;--green:#27e06a;--text:#f0ece6;--text-dim:#7a7068;--text-muted:#2e2e2e;}
 *{margin:0;padding:0;box-sizing:border-box;}body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;}
 header{background:#0b0b0b;border-bottom:3px solid var(--red);padding:0 22px;height:62px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:300;}
 .logo{font-family:'Anton',sans-serif;font-size:19px;letter-spacing:4px;color:#fff;}.logo span{color:var(--red);}
@@ -1131,8 +1131,8 @@ main{padding:20px 22px;max-width:1700px;margin:0 auto;}
 <script>
 var DATA=${dataJSON};
 var D=DATA.D,S=DATA.S;
-var TPAL=["#c8101e","#e88c00","#4fc3f7","#66bb6a","#e040fb","#ff8a65","#26c6da","#aed581","#ef5350","#42a5f5","#ffca28","#26a69a","#ec407a","#7e57c2","#4caf6e","#ffa726","#29b6f6","#cddc39","#ff7043","#5c6bc0","#4dd0e1","#f06292","#8d6e63","#78909c","#a5d6a7"];
-var PPAL=["#c8101e","#e88c00","#4fc3f7","#4caf6e","#ff4d6d","#b967ff","#00e5a0","#ff9f43","#26c6da","#f06292","#cddc39","#ffd740","#e57373"];
+var TPAL=["#ff2bd6","#34d6ff","#27e06a","#b6ff1a","#f2ff1a","#ff5a1f","#c850ff","#7d8cff","#ffd11a","#ff9a1f","#00e5a0","#ff4d6d","#4dd0e1","#b967ff","#f06292","#cddc39","#26c6da","#a5d6a7","#ffa726","#5c6bc0","#ec407a","#66bb6a","#29b6f6","#8d6e63","#78909c"];
+var PPAL=["#ff2bd6","#34d6ff","#27e06a","#b6ff1a","#f2ff1a","#ff5a1f","#c850ff","#7d8cff","#ffd11a","#00e5a0","#ff4d6d","#b967ff","#cddc39"];
 var activeDay='friday',activeView='post',filterType='all',filterVal=null;
 var tc=function(id){var i=D.teams.findIndex(function(t){return t.id===id;});return TPAL[i%TPAL.length]||'#888';};
 var pc=function(id){var i=D.posts.findIndex(function(p){return p.id===id;});return PPAL[i%PPAL.length]||'#888';};
