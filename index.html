@@ -382,7 +382,7 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
     </div>
   </div>
   <div id="validation-panel" style="display:none;margin-bottom:11px"></div>
-  <div class="card" style="margin-bottom:11px">
+  <div class="card" id="stats-card" style="margin-bottom:11px">
     <div class="card-header" style="margin-bottom:7px">
       <span class="card-title" style="font-size:10px">Shifts per Team – <span id="stats-day-label">Vrijdag</span></span>
       <div style="display:flex;gap:4px;align-items:center">
@@ -453,7 +453,7 @@ function buildAuthControls(){
   wrap.innerHTML='<span id="sync-badge" style="color:var(--text-dim);font-weight:600;font-size:11px"></span><button id="auth-btn" class="theme-btn" type="button" style="white-space:nowrap"></button>';
   grp.insertBefore(wrap, grp.firstChild);
 }
-function applyModeUI(){ var view=(appMode==='view'); var tabs=document.querySelectorAll('.nav-tab'); if(tabs[0]) tabs[0].style.display=view?'none':''; if(tabs[1]) tabs[1].style.display=view?'none':''; var rg=document.getElementById('btn-regen'); if(rg&&view) rg.style.display='none'; var pb=document.getElementById('btn-publish'); if(pb&&view) pb.style.display='none'; ['btn-xls','btn-pdf'].forEach(function(id){ var el=document.getElementById(id); if(el&&view) el.style.display='none'; }); if(view) goTab('rooster'); }
+function applyModeUI(){ var view=(appMode==='view'); var tabs=document.querySelectorAll('.nav-tab'); if(tabs[0]) tabs[0].style.display=view?'none':''; if(tabs[1]) tabs[1].style.display=view?'none':''; var rg=document.getElementById('btn-regen'); if(rg&&view) rg.style.display='none'; var pb=document.getElementById('btn-publish'); if(pb&&view) pb.style.display='none'; ['btn-xls','btn-pdf'].forEach(function(id){ var el=document.getElementById(id); if(el&&view) el.style.display='none'; }); var vp=document.getElementById('validation-panel'); if(vp&&view) vp.style.display='none'; var sc=document.getElementById('stats-card'); if(sc) sc.style.display=view?'none':''; if(view) goTab('rooster'); }
 function showApp(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(l)l.style.display='none'; if(g)g.style.display='none'; applyModeUI(); }
 function showLanding(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(g)g.style.display='none'; if(l)l.style.display='flex'; }
 function showLoginOverlay(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(l)l.style.display='none'; if(g)g.style.display='flex'; var em=document.getElementById('login-email'); if(em) setTimeout(function(){em.focus();},50); }
