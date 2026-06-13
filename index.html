@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Grensrock 2026 – Steward Planner</title>
+<title>Stewards planner · Grensrock</title>
+<link rel="icon" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
+<meta name="theme-color" content="#ff2bd6">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -146,9 +149,68 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
 #print-area{display:none;}
 @media print{body>*:not(#print-area){display:none!important;}#print-area{display:block!important;}#print-area .day-page{page-break-after:always;}#print-area .day-page:last-child{page-break-after:auto;}}
 @media(max-width:768px){.fmt-grid,.two-day{grid-template-columns:1fr;}.nav-tab{padding:5px 8px;font-size:10px;}}
+/* ===== Landing + login overlays (huisstijl) ===== */
+.overlay{position:fixed;inset:0;z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 18px;text-align:center;color:#fff;font-family:'Barlow',sans-serif;background:radial-gradient(120% 90% at 82% -8%,#ff2bd6 0%,rgba(255,43,214,0) 42%),radial-gradient(120% 90% at -8% 108%,#34d6ff 0%,rgba(52,214,255,0) 42%),linear-gradient(135deg,#0c0c0e,#1a0a18 55%,#0c0c0e);}
+.ov-logo{width:128px;max-width:46%;border-radius:22px;}
+.ov-kick{margin-top:14px;font-size:12px;letter-spacing:.3em;text-transform:uppercase;font-weight:800;color:#b6ff1a;}
+.ov-h1{font-family:'Anton',sans-serif;font-size:44px;text-transform:uppercase;margin:6px 0 4px;letter-spacing:.02em;}
+.ov-sub{color:#cfcfd6;font-size:14px;margin:0 0 26px;}
+.ov-cards{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;width:100%;max-width:720px;}
+.ov-card{flex:1 1 250px;cursor:pointer;text-align:center;color:#fff;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:16px;padding:22px;transition:.15s;font-family:inherit;}
+.ov-card:hover{border-color:#ff2bd6;background:rgba(255,43,214,.12);transform:translateY(-2px);}
+.ov-ic{font-size:30px;}
+.ov-card h2{font-family:'Anton',sans-serif;font-size:20px;margin:8px 0 6px;text-transform:uppercase;letter-spacing:.03em;}
+.ov-card span{color:#cfcfd6;font-size:13px;line-height:1.4;display:block;}
+.ov-foot{margin-top:26px;color:#8a8a92;font-size:11px;}
+.login-card{display:flex;flex-direction:column;gap:13px;width:100%;max-width:340px;background:#181818;border:1px solid #2c2c33;border-radius:18px;padding:26px;}
+.login-logo{width:116px;align-self:center;border-radius:18px;}
+.login-title{font-family:'Anton',sans-serif;font-size:19px;text-transform:uppercase;text-align:center;letter-spacing:.02em;}
+.login-sub{color:#9b9ba6;font-size:12px;text-align:center;margin-top:-9px;}
+.login-card input{padding:13px 15px;border-radius:11px;border:1px solid #2c2c33;background:#eef0f4;color:#111;font-size:15px;font-family:inherit;}
+.login-card input:focus{outline:2px solid #ff2bd6;}
+.login-btn{padding:14px;border-radius:11px;border:none;background:#ff2bd6;color:#111;font-weight:800;font-size:15px;cursor:pointer;font-family:inherit;}
+.login-btn:hover{background:#ff5ce0;}
+.login-btn:disabled{opacity:.6;cursor:default;}
+.login-err{color:#ff6b6b;font-size:12px;text-align:center;min-height:14px;}
+.login-back{background:none;border:none;color:#9b9ba6;cursor:pointer;font-size:12px;font-family:inherit;}
+.data-table thead th{position:relative;}
+.col-resizer{position:absolute;top:0;right:-3px;width:8px;height:100%;cursor:col-resize;user-select:none;z-index:3;}
+.col-resizer:hover{background:var(--gold);opacity:.5;}
+/* ===== einde overlays ===== */
 </style>
 </head>
 <body>
+<div id="ov-landing" class="overlay">
+  <img class="ov-logo" src="logo.png" alt="Grensrock">
+  <div class="ov-kick">Gratis muziekfestival &middot; Menen</div>
+  <h1 class="ov-h1">Stewards Planner</h1>
+  <p class="ov-sub">Kies hieronder wat je wil openen.</p>
+  <div class="ov-cards">
+    <button class="ov-card" type="button" onclick="chooseEdit()">
+      <div class="ov-ic">✏️</div>
+      <h2>Bewerken</h2>
+      <span>Teams uploaden, rooster genereren en aanpassen. Aanmelden vereist.</span>
+    </button>
+    <button class="ov-card" type="button" onclick="chooseView()">
+      <div class="ov-ic">📋</div>
+      <h2>Raadplegen</h2>
+      <span>Alleen-lezen weergave van het rooster. Ideaal om te delen.</span>
+    </button>
+  </div>
+  <div class="ov-foot">Grensrock &middot; Stewards Planner &mdash; gehost via GitHub Pages</div>
+</div>
+<div id="ov-login" class="overlay" style="display:none">
+  <form class="login-card" onsubmit="return doLogin(event)">
+    <img class="login-logo" src="logo.png" alt="Grensrock">
+    <div class="login-title">Stewards Planner bewerken</div>
+    <div class="login-sub">Aanmelden vereist</div>
+    <input id="login-email" type="email" placeholder="E-mail" autocomplete="username" required>
+    <input id="login-pass" type="password" placeholder="Wachtwoord" autocomplete="current-password" required>
+    <button class="login-btn" type="submit">Aanmelden</button>
+    <div id="login-err" class="login-err"></div>
+    <button type="button" class="login-back" onclick="backToLanding()">&larr; Terug naar keuze</button>
+  </form>
+</div>
 <header>
   <div class="logo-wrap">
     <div>
@@ -371,31 +433,57 @@ async function cloudLoad(){ if(!sb) return null;
   catch(e){ console.warn('load error',e); return null; } }
 function renderEverything(){ renderTimetableInvoer(); renderInputTables();
   if(S){ renderStats(); renderSchedView(); renderValidation();
-    ['btn-xls','btn-pdf','btn-regen','btn-publish'].forEach(id=>{const el=document.getElementById(id); if(el) el.style.display='';}); } }
+    ['btn-xls','btn-pdf','btn-regen','btn-publish'].forEach(id=>{const el=document.getElementById(id); if(el) el.style.display='';}); } applyModeUI(); }
 function subscribeRealtime(){ if(!sb) return;
   sb.channel('stewards_planner_rt').on('postgres_changes',{event:'UPDATE',schema:'public',table:'stewards_planner'},payload=>{
     if(editMode) return; _applyingRemote=true;
     try{ applyState(payload.new&&payload.new.data); renderEverything(); setSyncBadge('🔄 bijgewerkt'); }
     finally{ _applyingRemote=false; } }).subscribe(); }
 function setSyncBadge(t){ const b=document.getElementById('sync-badge'); if(b) b.textContent=t; }
-function setEditUI(){ const btn=document.getElementById('login-btn'), banner=document.getElementById('ro-banner');
-  if(btn) btn.textContent=editMode?('🔓 '+userEmail+' — uitloggen'):'🔒 Inloggen om te bewerken';
-  if(banner) banner.style.display=editMode?'none':''; }
-async function doLoginToggle(){ if(!sb){ toast('Supabase niet geladen','err'); return; }
-  if(editMode){ await sb.auth.signOut(); return; }
-  const email=prompt('E-mail (Supabase login):'); if(!email) return;
-  const password=prompt('Wachtwoord:'); if(!password) return;
-  const {error}=await sb.auth.signInWithPassword({email:email.trim(),password});
-  if(error){ toast('❌ Login mislukt: '+error.message,'err'); return; } }
-function mountLoginBar(){
-  const bar=document.createElement('div');
-  bar.style.cssText='position:fixed;top:8px;right:10px;z-index:9999;display:flex;gap:8px;align-items:center;font:600 12px/1 Barlow Condensed,sans-serif';
-  bar.innerHTML='<span id="sync-badge" style="color:var(--text-dim,#999)"></span><button id="login-btn" onclick="doLoginToggle()" style="cursor:pointer;padding:6px 10px;border-radius:8px;border:1px solid var(--gold,#ffd11a);background:transparent;color:var(--gold,#ffd11a);font:inherit">🔒 Inloggen</button>';
-  document.body.appendChild(bar);
-  const banner=document.createElement('div'); banner.id='ro-banner';
-  banner.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9998;background:rgba(17,17,17,.85);backdrop-filter:blur(4px);color:#fff;text-align:center;padding:7px;font:600 12px Barlow Condensed,sans-serif;border-top:1px solid #ff2bd655';
-  banner.textContent='👁️ Alleen-lezen weergave — log in om te bewerken';
-  document.body.appendChild(banner); }
+let appMode='view', loggedIn=false;
+function refreshEdit(){ editMode = (loggedIn && appMode==='edit') && !!sb; setEditUI(); }
+function setEditUI(){
+  var ab=document.getElementById('auth-btn');
+  if(ab){ ab.textContent = editMode ? ('🔓 '+userEmail+' · uitloggen') : '🔒 Aanmelden'; ab.onclick = editMode ? logout : chooseEdit; }
+}
+function buildAuthControls(){
+  var grp=document.querySelector('header > div:last-child'); if(!grp) return;
+  var wrap=document.createElement('span');
+  wrap.style.cssText='display:inline-flex;gap:8px;align-items:center;margin-right:4px';
+  wrap.innerHTML='<span id="sync-badge" style="color:var(--text-dim);font-weight:600;font-size:11px"></span><button id="auth-btn" class="theme-btn" type="button" style="white-space:nowrap"></button>';
+  grp.insertBefore(wrap, grp.firstChild);
+}
+function applyModeUI(){ var view=(appMode==='view'); var tabs=document.querySelectorAll('.nav-tab'); if(tabs[0]) tabs[0].style.display=view?'none':''; if(tabs[1]) tabs[1].style.display=view?'none':''; var rg=document.getElementById('btn-regen'); if(rg&&view) rg.style.display='none'; var pb=document.getElementById('btn-publish'); if(pb&&view) pb.style.display='none'; ['btn-xls','btn-pdf'].forEach(function(id){ var el=document.getElementById(id); if(el&&view) el.style.display='none'; }); if(view) goTab('rooster'); }
+function showApp(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(l)l.style.display='none'; if(g)g.style.display='none'; applyModeUI(); }
+function showLanding(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(g)g.style.display='none'; if(l)l.style.display='flex'; }
+function showLoginOverlay(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(l)l.style.display='none'; if(g)g.style.display='flex'; var em=document.getElementById('login-email'); if(em) setTimeout(function(){em.focus();},50); }
+function backToLanding(){ var e=document.getElementById('login-err'); if(e)e.textContent=''; showLanding(); }
+function chooseView(){ appMode='view'; refreshEdit(); showApp(); }
+function chooseEdit(){ appMode='edit'; refreshEdit(); if(loggedIn) showApp(); else showLoginOverlay(); }
+async function doLogin(ev){ ev.preventDefault();
+  var er=document.getElementById('login-err'); if(er)er.textContent='';
+  if(!sb){ if(er)er.textContent='Supabase niet geladen'; return false; }
+  var email=(document.getElementById('login-email').value||'').trim();
+  var password=document.getElementById('login-pass').value||'';
+  var btn=ev.target.querySelector('.login-btn'); if(btn){ btn.disabled=true; btn.textContent='Aanmelden…'; }
+  var res=await sb.auth.signInWithPassword({email:email,password:password});
+  if(btn){ btn.disabled=false; btn.textContent='Aanmelden'; }
+  if(res.error){ if(er)er.textContent='❌ '+res.error.message; return false; }
+  loggedIn=true; userEmail=email; appMode='edit'; refreshEdit(); showApp(); return false; }
+async function logout(){ if(sb) await sb.auth.signOut(); loggedIn=false; appMode='view'; refreshEdit(); showLanding(); }
+function makeColsResizable(table){
+  if(!table || table._resz) return; var ths=table.querySelectorAll('thead th'); if(!ths.length) return; table._resz=1;
+  ths.forEach(function(th){ var h=document.createElement('span'); h.className='col-resizer'; th.appendChild(h);
+    h.addEventListener('mousedown',function(e){ e.preventDefault(); e.stopPropagation();
+      ths.forEach(function(t){ if(!t.style.width) t.style.width=t.offsetWidth+'px'; });
+      table.style.tableLayout='fixed';
+      var sx=e.pageX, sw=th.offsetWidth;
+      function mv(ev){ th.style.width=Math.max(42,sw+(ev.pageX-sx))+'px'; }
+      function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
+      document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+    });
+  });
+}
 /* ===== einde Supabase blok ===== */
 
 
@@ -481,10 +569,13 @@ function parseWB(wb){
 function parseAvRaw(f,t){
   const a=String(f||'').trim().toLowerCase(),b=String(t||'').trim().toLowerCase();
   if(!a&&!b)return null;
-  if(a==='begin')return{from:'begin',to:b==='einde'?'einde':(parseInt(b)||0)};
-  const na=parseInt(a),nb=parseInt(b);
-  if(isNaN(na)||isNaN(nb)||(na===0&&nb===0))return null;
-  return{from:na,to:b==='einde'?'einde':nb};
+  const from = a==='begin' ? 'begin' : (a===''?null:parseInt(a));
+  const to   = b==='einde' ? 'einde' : (b===''?null:parseInt(b));
+  const fromOk = from==='begin' || (typeof from==='number' && !isNaN(from));
+  const toOk   = to==='einde'   || (typeof to==='number'   && !isNaN(to));
+  if(!fromOk && !toOk) return null;
+  if(from===0 && to===0) return null;
+  return { from: fromOk?from:'begin', to: toOk?to:'einde' };
 }
 function parseList(v){if(!v)return[];return String(v).split(',').map(s=>s.trim()).filter(Boolean);}
 function parseBreaks(v){if(!v)return[];return String(v).split(',').map(s=>parseInt(s.trim())).filter(n=>!isNaN(n)).slice(0,2);}
@@ -1163,18 +1254,19 @@ renderView();
 function toast(msg,type='ok'){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';setTimeout(()=>t.classList.remove('show'),4000);}
 
 (async function init(){
-  mountLoginBar();
+  buildAuthControls();
   if(sb){
-    sb.auth.onAuthStateChange((_e,session)=>{ editMode=!!session; userEmail=session?session.user.email:''; setEditUI(); });
-    try{ const {data:{session}}=await sb.auth.getSession(); editMode=!!session; userEmail=session?session.user.email:''; }catch(e){}
+    sb.auth.onAuthStateChange((_e,session)=>{ loggedIn=!!session; userEmail=session?session.user.email:''; refreshEdit(); });
+    try{ const {data:{session}}=await sb.auth.getSession(); loggedIn=!!session; userEmail=session?session.user.email:''; }catch(e){}
   }
-  setEditUI();
+  refreshEdit();
   const cloud=await cloudLoad();
   let loaded=false;
   if(cloud&&(Array.isArray(cloud.teams)||Array.isArray(cloud.posts))) loaded=applyState(cloud);
   if(!loaded){ const hasSaved=loadPersistent(); if(!hasSaved)initDefaultPostsAndTimetable(); }
   subscribeRealtime();
   renderEverything();
+  document.querySelectorAll('#sec-invoer table.data-table').forEach(makeColsResizable);
 })();
 </script>
 </body>
