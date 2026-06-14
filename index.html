@@ -457,9 +457,13 @@ function applyModeUI(){ var view=(appMode==='view'); var tabs=document.querySele
 function showApp(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(l)l.style.display='none'; if(g)g.style.display='none'; applyModeUI(); }
 function showLanding(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(g)g.style.display='none'; if(l)l.style.display='flex'; }
 function showLoginOverlay(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(l)l.style.display='none'; if(g)g.style.display='flex'; var em=document.getElementById('login-email'); if(em) setTimeout(function(){em.focus();},50); }
-function backToLanding(){ var e=document.getElementById('login-err'); if(e)e.textContent=''; showLanding(); }
-function chooseView(){ appMode='view'; refreshEdit(); showApp(); }
-function chooseEdit(){ appMode='edit'; refreshEdit(); if(loggedIn) showApp(); else showLoginOverlay(); }
+function backToLanding(){ var e=document.getElementById('login-err'); if(e)e.textContent=''; history.replaceState(null,'',location.pathname+location.search); route(); }
+function route(){ var h=(location.hash||'').toLowerCase();
+  if(h.indexOf('mobiel')>=0){ appMode='view'; refreshEdit(); showApp(); }
+  else if(h.indexOf('editor')>=0){ appMode='edit'; refreshEdit(); if(loggedIn) showApp(); else showLoginOverlay(); }
+  else { showLanding(); } }
+function chooseView(){ if((location.hash||'').toLowerCase().indexOf('mobiel')>=0) route(); else location.hash='mobiel'; }
+function chooseEdit(){ if((location.hash||'').toLowerCase().indexOf('editor')>=0) route(); else location.hash='editor'; }
 async function doLogin(ev){ ev.preventDefault();
   var er=document.getElementById('login-err'); if(er)er.textContent='';
   if(!sb){ if(er)er.textContent='Supabase niet geladen'; return false; }
@@ -470,7 +474,7 @@ async function doLogin(ev){ ev.preventDefault();
   if(btn){ btn.disabled=false; btn.textContent='Aanmelden'; }
   if(res.error){ if(er)er.textContent='❌ '+res.error.message; return false; }
   loggedIn=true; userEmail=email; appMode='edit'; refreshEdit(); showApp(); return false; }
-async function logout(){ if(sb) await sb.auth.signOut(); loggedIn=false; appMode='view'; refreshEdit(); showLanding(); }
+async function logout(){ if(sb) await sb.auth.signOut(); loggedIn=false; appMode='view'; refreshEdit(); history.replaceState(null,'',location.pathname+location.search); route(); }
 function makeColsResizable(table){
   if(!table || table._resz) return; var ths=table.querySelectorAll('thead th'); if(!ths.length) return; table._resz=1;
   ths.forEach(function(th){ var h=document.createElement('span'); h.className='col-resizer'; th.appendChild(h);
@@ -1267,6 +1271,8 @@ function toast(msg,type='ok'){const t=document.getElementById('toast');t.textCon
   subscribeRealtime();
   renderEverything();
   document.querySelectorAll('#sec-invoer table.data-table').forEach(makeColsResizable);
+  window.addEventListener('hashchange', route);
+  route();
 })();
 </script>
 </body>
