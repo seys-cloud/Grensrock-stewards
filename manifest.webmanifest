@@ -1,0 +1,16 @@
+{
+  "name": "Grensrock Stewards Planner",
+  "short_name": "Stewards",
+  "description": "Steward-rooster voor Grensrock 2026",
+  "lang": "nl",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0c0c0e",
+  "theme_color": "#ff2bd6",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

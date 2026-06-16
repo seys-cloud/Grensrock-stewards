@@ -7,6 +7,12 @@
 <link rel="icon" href="favicon.png">
 <link rel="apple-touch-icon" href="favicon.png">
 <meta name="theme-color" content="#ff2bd6">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stewards">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -96,7 +102,7 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
 .chip:hover{transform:scale(1.03);box-shadow:0 2px 10px rgba(0,0,0,.4);}
 .chip.dragging{opacity:.2;cursor:grabbing;}
 .chip-name{font-size:10px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;}
-.chip-members{font-size:8px;font-weight:400;opacity:.72;font-family:'Barlow',sans-serif;text-transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.chip-members{font-size:10px;font-weight:400;opacity:.82;font-family:'Barlow',sans-serif;text-transform:none;line-height:1.25;}
 .chip-sm{cursor:default!important;font-size:9px;padding:2px 5px;font-weight:700;flex-direction:row;align-items:center;width:auto;white-space:nowrap;}
 .empty-slot{height:22px;border-radius:3px;border:1px dashed var(--text-muted);opacity:.3;margin:1px 0;}
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:5px;}
@@ -280,8 +286,10 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
           <tr><td>Zaterdag_Van / _Tot</td><td>Aanwezig van–tot</td></tr>
           <tr><td>Voorkeur_Post</td><td>Post(en), komma-gescheiden</td></tr>
           <tr><td>Voorkeur_Collega</td><td>Collega-team(s), komma-gescheiden</td></tr>
-          <tr><td style="color:var(--gold)">Pauze_Vrijdag</td><td>Gewenste pauze-uren bv. <span class="code-hint">21,23</span></td></tr>
-          <tr><td style="color:var(--gold)">Pauze_Zaterdag</td><td>Idem zaterdag</td></tr>
+          <tr><td style="color:var(--gold)">Bands_Vrijdag</td><td>Uren vrij voor bands, bv. <span class="code-hint">21,23</span></td></tr>
+          <tr><td style="color:var(--gold)">Bands_Zaterdag</td><td>Idem zaterdag</td></tr>
+          <tr><td>Post_uitsluitend</td><td>Enkel op deze post inplannen (leeg = vrij)</td></tr>
+          <tr><td>-18j</td><td><span class="code-hint">x</span> als jonger dan 18 jaar</td></tr>
         </table>
       </div>
       <div>
@@ -325,7 +333,7 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
     <div class="card-header"><span class="card-title">Teams</span><span class="badge" id="cnt-teams">0</span></div>
     <div style="overflow-x:auto">
       <table class="data-table">
-        <thead><tr><th>#</th><th>Team</th><th>Leden</th><th>Vrijdag</th><th>Zaterdag</th><th style="color:var(--gold)">Pauze Vr.</th><th style="color:var(--gold)">Pauze Za.</th><th>Post Vkr.</th><th>Collega Vkr.</th><th></th></tr></thead>
+        <thead><tr><th>#</th><th>Team</th><th>Leden</th><th>Vrijdag</th><th>Zaterdag</th><th style="color:var(--gold)">Bands vrij</th><th style="color:var(--gold)">Bands zat</th><th>Post Vkr.</th><th>Collega Vkr.</th><th>Post uitsl.</th><th>-18j</th><th></th></tr></thead>
         <tbody id="tbody-teams"></tbody>
       </table>
     </div>
@@ -334,7 +342,7 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
     <div class="card-header"><span class="card-title">Posten</span><span class="badge" id="cnt-posts">0</span></div>
     <div style="overflow-x:auto">
       <table class="data-table">
-        <thead><tr><th>#</th><th>Post</th><th>Vrijdag</th><th>Zaterdag</th><th style="color:var(--gold)">Teams/Uur Vrijdag</th><th style="color:var(--gold)">Teams/Uur Zaterdag</th><th></th></tr></thead>
+        <thead><tr><th>#</th><th>Post</th><th>Vrijdag</th><th>Zaterdag</th><th style="color:var(--gold)">Teams/Uur Vrijdag</th><th style="color:var(--gold)">Teams/Uur Zaterdag</th><th>+18j</th><th></th></tr></thead>
         <tbody id="tbody-posts"></tbody>
       </table>
     </div>
@@ -566,7 +574,9 @@ function parseWB(wb){
     availability:{friday:parseAvRaw(r.Vrijdag_Van,r.Vrijdag_Tot),saturday:parseAvRaw(r.Zaterdag_Van,r.Zaterdag_Tot)},
     prefPosts:parseList(r.Voorkeur_Post||r.voorkeur_post),
     prefColleagues:parseList(r.Voorkeur_Collega||r.voorkeur_collega),
-    breakPref:{friday:parseBreaks(r.Pauze_Vrijdag||r.pauze_vrijdag),saturday:parseBreaks(r.Pauze_Zaterdag||r.pauze_zaterdag)}
+    breakPref:{friday:parseBreaks(r.Bands_Vrijdag||r.bands_vrijdag||r.Pauze_Vrijdag||r.pauze_vrijdag),saturday:parseBreaks(r.Bands_Zaterdag||r.bands_zaterdag||r.Pauze_Zaterdag||r.pauze_zaterdag)},
+    exclusivePost:String(r['Post_uitsluitend']||r['Post uitsluitend']||r.post_uitsluitend||'').trim(),
+    under18:parseBool(r['-18j']||r['Min18']||r['min18']||r['-18'])
   }));
   onDataReady();
 }
@@ -582,6 +592,7 @@ function parseAvRaw(f,t){
   return { from: fromOk?from:'begin', to: toOk?to:'einde' };
 }
 function parseList(v){if(!v)return[];return String(v).split(',').map(s=>s.trim()).filter(Boolean);}
+function parseBool(v){const x=String(v==null?'':v).trim().toLowerCase();return ['x','ja','j','1','true','waar','yes','y','-18'].includes(x);}
 function parseBreaks(v){if(!v)return[];return String(v).split(',').map(s=>parseInt(s.trim())).filter(n=>!isNaN(n)).slice(0,2);}
 function parseNeedStr(str,av){const out={};if(!av)return out;if(!str||!String(str).trim()){for(let h=av.from;h<av.to;h++)out[h]=1;return out;}const ch={};String(str).split(',').forEach(p=>{const m=p.trim().match(/^(\d+):(\d+)$/);if(m)ch[parseInt(m[1])]=parseInt(m[2]);});const keys=Object.keys(ch).map(Number).sort((a,b)=>a-b);let cur=1;for(let h=av.from;h<av.to;h++){for(const k of keys){if(k<=h)cur=ch[k];}out[h]=Math.max(1,cur);}return out;}
 function getNeed(post,day,hr){const n=post.needPerHour?.[day]?.[hr];return n!==undefined?n:1;}
@@ -623,7 +634,7 @@ function renderTimetableInvoer(){
   const mkRows=(day,acts)=>{if(!acts.length)return'';
     const sorted=[...acts].sort((a,b)=>(a.fromH*60+a.fromMin)-(b.fromH*60+b.fromMin));
     return`<p style="font-family:'Barlow Condensed';font-size:10px;font-weight:800;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin:8px 0 5px">${day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06'}</p>
-    <table class="data-table"><thead><tr><th>Artiest</th><th>Van</th><th>Tot</th><th></th></tr></thead>
+    <table class="data-table" style="table-layout:fixed;width:100%"><colgroup><col><col style="width:78px"><col style="width:78px"><col style="width:66px"></colgroup><thead><tr><th>Artiest</th><th>Van</th><th>Tot</th><th></th></tr></thead>
     <tbody>${sorted.map(a=>`<tr><td><strong>${a.name}</strong></td>
       <td style="font-family:'JetBrains Mono';font-size:10px;color:var(--gold)">${fm(a.fromH,a.fromMin)}</td>
       <td style="font-family:'JetBrains Mono';font-size:10px;color:var(--gold)">${fm(a.toH,a.toMin)}</td>
@@ -681,6 +692,8 @@ function renderInputTables(){
     <td style="color:var(--gold);font-size:10px">${(t.breakPref.saturday||[]).map(h=>fh(h)).join(', ')||'—'}</td>
     <td style="color:var(--text-dim);font-size:10px">${t.prefPosts.join(', ')||'—'}</td>
     <td style="color:var(--text-dim);font-size:10px">${t.prefColleagues.join(', ')||'—'}</td>
+    <td style="color:var(--text-dim);font-size:10px">${t.exclusivePost||'—'}</td>
+    <td style="text-align:center;font-size:11px">${t.under18?'<span style="color:var(--red);font-weight:800">−18</span>':'—'}</td>
     <td><button class="btn btn-xs btn-ghost" onclick="openEditTeamModal('${t.id}')">✎</button>
         <button class="btn btn-xs btn-danger" onclick="deleteTeam('${t.id}')">✕</button></td></tr>`).join('');
   document.getElementById('tbody-posts').innerHTML=D.posts.map((p,i)=>`<tr>
@@ -690,6 +703,7 @@ function renderInputTables(){
     <td style="font-size:10px">${avStr(p.schedule.saturday?p.schedule.saturday:null)}</td>
     <td style="font-size:10px">${needSummary(p.needPerHour.friday)}</td>
     <td style="font-size:10px">${needSummary(p.needPerHour.saturday)}</td>
+    <td style="text-align:center;font-size:11px">${p.adults18?'<span style="color:var(--gold);font-weight:800">18+</span>':'—'}</td>
     <td><button class="btn btn-xs btn-ghost" onclick="openEditPostModal('${p.id}')">✎</button>
         <button class="btn btn-xs btn-danger" onclick="deletePost('${p.id}')">✕</button></td></tr>`).join('');
 }
@@ -697,7 +711,7 @@ function renderInputTables(){
 function closeModal(){document.getElementById('modal-backdrop').classList.remove('open');}
 function _openModal(title,body){document.getElementById('modal-title').textContent=title;document.getElementById('modal-body').innerHTML=body;document.getElementById('modal-backdrop').classList.add('open');}
 function openEditTeamModal(id){const t=D.teams.find(x=>x.id===id);if(!t)return;modalMode='editTeam';modalId=id;_openModal('Team: '+t.name,teamForm(t));}
-function openNewTeamModal(){modalMode='newTeam';modalId=null;_openModal('Nieuw Team',teamForm({name:'',members:'',availability:{friday:{from:'begin',to:'einde'},saturday:{from:'begin',to:'einde'}},prefPosts:[],prefColleagues:[],breakPref:{friday:[],saturday:[]}}));}
+function openNewTeamModal(){modalMode='newTeam';modalId=null;_openModal('Nieuw Team',teamForm({name:'',members:'',availability:{friday:{from:'begin',to:'einde'},saturday:{from:'begin',to:'einde'}},prefPosts:[],prefColleagues:[],breakPref:{friday:[],saturday:[]},exclusivePost:'',under18:false}));}
 function openEditPostModal(id){const p=D.posts.find(x=>x.id===id);if(!p)return;modalMode='editPost';modalId=id;_openModal('Post: '+p.name,postForm(p));}
 function openNewPostModal(){modalMode='newPost';modalId=null;_openModal('Nieuwe Post',postForm({name:'',schedule:{friday:null,saturday:null},needPerHour:{friday:{},saturday:{}}}));}
 function openNewActModal(day){modalMode='newAct';modalId=null;modalDay=day;_openModal('Act Toevoegen – '+(day==='friday'?'Vrijdag':'Zaterdag'),actForm({name:'',fromH:'',fromMin:0,toH:'',toMin:0}));}
@@ -742,8 +756,12 @@ function teamForm(t){
   <div class="form-row full"><div class="form-group"><label>Post Voorkeur(en) — komma-gescheiden</label><input id="f-ppost" value="${(t.prefPosts||[]).join(', ')}"></div></div>
   <div class="form-row full"><div class="form-group"><label>Collega Voorkeur(en) — komma-gescheiden</label><input id="f-pcol" value="${(t.prefColleagues||[]).join(', ')}"></div></div>
   <div class="form-row">
-    <div class="form-group"><label>Pauze Vrijdag (max 2 uren)</label><input id="f-bfr" value="${(t.breakPref?.friday||[]).join(', ')}"><span class="form-hint">bv. 21,23</span></div>
-    <div class="form-group"><label>Pauze Zaterdag</label><input id="f-bsa" value="${(t.breakPref?.saturday||[]).join(', ')}"></div>
+    <div class="form-group"><label>Bands vrijdag (max 2 uren)</label><input id="f-bfr" value="${(t.breakPref?.friday||[]).join(', ')}"><span class="form-hint">uren vrij voor bands, bv. 21,23</span></div>
+    <div class="form-group"><label>Bands zaterdag</label><input id="f-bsa" value="${(t.breakPref?.saturday||[]).join(', ')}"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Post uitsluitend</label><input id="f-excl" value="${t.exclusivePost||''}"><span class="form-hint">enkel op deze post (leeg = vrij)</span></div>
+    <div class="form-group"><label>Leeftijd</label><label style="display:flex;align-items:center;gap:7px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text);font-size:13px"><input id="f-u18" type="checkbox" ${t.under18?'checked':''} style="width:auto"> Jonger dan 18 (−18j)</label></div>
   </div>`;
 }
 function postForm(p){
@@ -757,7 +775,8 @@ function postForm(p){
     <div class="form-group"><label>Zaterdag Tot</label><input id="f-st" type="number" min="0" max="30" value="${p.schedule?.saturday?.to??''}"></div>
   </div>
   <div class="form-row full"><div class="form-group"><label>Teams/Uur Vrijdag</label><input id="f-nfr" value="${needStrFromObj(p.needPerHour?.friday)}"><span class="form-hint">bv. 18:1,22:2,25:1</span></div></div>
-  <div class="form-row full"><div class="form-group"><label>Teams/Uur Zaterdag</label><input id="f-nsa" value="${needStrFromObj(p.needPerHour?.saturday)}"></div></div>`;
+  <div class="form-row full"><div class="form-group"><label>Teams/Uur Zaterdag</label><input id="f-nsa" value="${needStrFromObj(p.needPerHour?.saturday)}"></div></div>
+  <div class="form-row full"><div class="form-group"><label>Leeftijdsbeperking</label><label style="display:flex;align-items:center;gap:7px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text);font-size:13px"><input id="f-a18" type="checkbox" ${p.adults18?'checked':''} style="width:auto"> Enkel +18j stewards op deze post</label></div></div>`;
 }
 function actForm(a){
   return`<div class="form-row full"><div class="form-group"><label>Artiestennaam</label><input id="f-name" value="${a.name||''}" placeholder="bv. TRIPLE A"></div></div>
@@ -776,14 +795,14 @@ function saveModal(){if(!requireEdit())return;
     const fFrom=getAvFieldVal('f-fv'),fTo=getAvFieldVal('f-ft');
     const sFrom=getAvFieldVal('f-sv'),sTo=getAvFieldVal('f-st');
     const mkAv=(f,t)=>{if(!f&&!t)return null;return{from:f||'begin',to:t||'einde'};};
-    const obj={id:modalMode==='newTeam'?'T'+Date.now():modalId,name:g('f-name').trim()||'Team',members:g('f-members').trim(),availability:{friday:mkAv(fFrom,fTo),saturday:mkAv(sFrom,sTo)},prefPosts:parseList(g('f-ppost')),prefColleagues:parseList(g('f-pcol')),breakPref:{friday:parseBreaks(g('f-bfr')),saturday:parseBreaks(g('f-bsa'))}};
+    const obj={id:modalMode==='newTeam'?'T'+Date.now():modalId,name:g('f-name').trim()||'Team',members:g('f-members').trim(),availability:{friday:mkAv(fFrom,fTo),saturday:mkAv(sFrom,sTo)},prefPosts:parseList(g('f-ppost')),prefColleagues:parseList(g('f-pcol')),breakPref:{friday:parseBreaks(g('f-bfr')),saturday:parseBreaks(g('f-bsa'))},exclusivePost:g('f-excl').trim(),under18:document.getElementById('f-u18')?.checked||false};
     if(modalMode==='newTeam')D.teams.push(obj);else{const i=D.teams.findIndex(t=>t.id===modalId);if(i!==-1)D.teams[i]=obj;}
     renderInputTables();
   }else if(modalMode==='editPost'||modalMode==='newPost'){
     const fa=parseAvRaw(g('f-fv'),g('f-ft')),sa=parseAvRaw(g('f-sv'),g('f-st'));
     const fav=fa?{from:resolveHour(fa.from,'friday','from'),to:resolveHour(fa.to,'friday','to')}:null;
     const sav=sa?{from:resolveHour(sa.from,'saturday','from'),to:resolveHour(sa.to,'saturday','to')}:null;
-    const obj={id:modalMode==='newPost'?'P'+Date.now():modalId,name:g('f-name').trim()||'Post',schedule:{friday:fav,saturday:sav},needPerHour:{friday:parseNeedStr(g('f-nfr'),fav),saturday:parseNeedStr(g('f-nsa'),sav)}};
+    const obj={id:modalMode==='newPost'?'P'+Date.now():modalId,name:g('f-name').trim()||'Post',schedule:{friday:fav,saturday:sav},needPerHour:{friday:parseNeedStr(g('f-nfr'),fav),saturday:parseNeedStr(g('f-nsa'),sav)},adults18:document.getElementById('f-a18')?.checked||false};
     if(modalMode==='newPost')D.posts.push(obj);else{const i=D.posts.findIndex(p=>p.id===modalId);if(i!==-1)D.posts[i]=obj;}
     renderInputTables();savePersistent();
   }else if(modalMode==='newAct'||modalMode==='editAct'){
@@ -819,7 +838,7 @@ function buildSchedule(){
       sorted.forEach(post=>{
         const ps=post.schedule[day];if(!ps||hour<ps.from||hour>=ps.to){sched[day][hour][post.id]=[];return;}
         const need=getNeed(post,day,hour);
-        if(isOpkuis(post)){const all=D.teams.filter(t=>!usedH.has(t.id)&&isAvail(t,day,hour)).map(t=>t.id);sched[day][hour][post.id]=all;all.forEach(tid=>{usedH.add(tid);st[tid].tot++;st[tid].dayShifts[day]++;st[tid].postCounts[post.id]=(st[tid].postCounts[post.id]||0)+1;});return;}
+        if(isOpkuis(post)){const all=D.teams.filter(t=>!usedH.has(t.id)&&isAvail(t,day,hour)&&!(t.under18&&post.adults18)&&!(t.exclusivePost&&t.exclusivePost.toLowerCase()!==post.name.toLowerCase())).map(t=>t.id);sched[day][hour][post.id]=all;all.forEach(tid=>{usedH.add(tid);st[tid].tot++;st[tid].dayShifts[day]++;st[tid].postCounts[post.id]=(st[tid].postCounts[post.id]||0)+1;});return;}
         const cands=D.teams.filter(t=>!usedH.has(t.id)).map(t=>({t,sc:scoreT(t,post,hour,day,st)})).filter(x=>x.sc>-9000).sort((a,b)=>b.sc-a.sc);
         const assigned=[];
         if(need>=2&&cands.length>=2){let found=false;for(let i=0;i<cands.length&&!found;i++){for(const cn of cands[i].t.prefColleagues){const bi=cands.findIndex((x,xi)=>xi!==i&&x.t.name.toLowerCase()===cn.toLowerCase());if(bi!==-1){assigned.push(cands[i].t.id,cands[bi].t.id);found=true;break;}}}if(!found)for(const c of cands){if(assigned.length>=need)break;if(!assigned.includes(c.t.id))assigned.push(c.t.id);}
@@ -832,11 +851,14 @@ function buildSchedule(){
   });
   return sched;
 }
+function availHours(team,day){const av=getAv(team,day);return av?Math.max(0,av.to-av.from):0;}
 function scoreT(team,post,hour,day,st){
   if(!isAvail(team,day,hour))return -10000;
-  if((team.breakPref[day]||[]).includes(hour))return -9500;
+  if(team.under18 && post.adults18)return -10000;                 /* -18j niet op +18j post */
+  if(team.exclusivePost && team.exclusivePost.toLowerCase()!==post.name.toLowerCase())return -10000; /* enkel op eigen post */
   const s=st[team.id];let score=100;
-  score-=(s.dayShifts[day]||0)*14;
+  if((team.breakPref[day]||[]).includes(hour))score-=250;         /* bands = zachte voorkeur, geen harde uitsluiting */
+  const avH=availHours(team,day)||1;score-=(s.dayShifts[day]/avH)*130;  /* relatieve eerlijkheid: gelijk aandeel gewerkt/beschikbaar */
   const cnt=s.postCounts[post.id]||0;const isPref=team.prefPosts.some(pp=>pp.toLowerCase()===post.name.toLowerCase());
   if(isPref){score+=40;score-=cnt*7;}else{if(cnt===0)score+=5;else if(cnt===1)score-=65;else if(cnt===2)score-=150;else if(cnt===3)score-=270;else score-=420;}
   const consec=(s.lastH[day]===hour-1)?s.consec[day]:0;if(consec===1)score-=5;else if(consec===2)score-=20;else if(consec===3)score-=55;else if(consec>=4)score-=115;
@@ -866,7 +888,7 @@ function runValidation(){
   ['friday','saturday'].forEach(day=>{D.posts.forEach(post=>{const ps=post.schedule[day];if(!ps)return;for(let h=ps.from;h<ps.to;h++){const arr=(S[day][h]?.[post.id]||[]);const need=getNeed(post,day,h);if(arr.length<need&&!isOpkuis(post))understaffed.push(`${day==='friday'?'Vrijdag':'Zaterdag'} ${fh(h)} – ${post.name}: ${arr.length}/${need} team${need>1?'s':''} (${need-arr.length} te weinig)`);}});});
   if(understaffed.length===0)ok.push(`✅ Alle post-slots volledig bezet`);
   let bOk=0;const bVio=[];['friday','saturday'].forEach(day=>{D.teams.forEach(team=>{(team.breakPref[day]||[]).forEach(hr=>{const working=Object.values(S[day]?.[hr]||{}).some(a=>a.includes(team.id));if(working)bVio.push(`${team.name} ${day==='friday'?'Vr':'Za'} ${fh(hr)}`);else bOk++;});});});
-  const bTot=bOk+bVio.length;if(bTot===0)ok.push('✅ Geen pauze-voorkeuren');else if(bVio.length===0)ok.push(`✅ Alle ${bTot} pauze-voorkeuren gerespecteerd`);else warn.push({msg:`⚠️ ${bVio.length}/${bTot} pauze-voorkeur(en) niet gerespecteerd`,details:bVio.join(' · ')});
+  const bTot=bOk+bVio.length;if(bTot===0)ok.push('✅ Geen bands-voorkeuren');else if(bVio.length===0)ok.push(`✅ Alle ${bTot} bands-voorkeuren gerespecteerd`);else warn.push({msg:`⚠️ ${bVio.length}/${bTot} bands-voorkeur(en) niet gerespecteerd`,details:bVio.join(' · ')});
   const ppMissed=[];D.teams.forEach(team=>{if(!team.prefPosts.length)return;const prefObjs=D.posts.filter(p=>team.prefPosts.some(pp=>pp.toLowerCase()===p.name.toLowerCase()));const hasAny=['friday','saturday'].some(day=>Object.values(S[day]||{}).some(hp=>prefObjs.some(p=>(hp[p.id]||[]).includes(team.id))));if(!hasAny)ppMissed.push(team.name+' ('+team.prefPosts.join(', ')+')');}); 
   const ppTot=D.teams.filter(t=>t.prefPosts.length).length;if(ppTot===0)ok.push('✅ Geen post-voorkeuren');else if(ppMissed.length===0)ok.push(`✅ Alle ${ppTot} teams op voorkeur-post`);else warn.push({msg:`⚠️ ${ppMissed.length}/${ppTot} teams niet op voorkeur-post`,details:ppMissed.join(' · ')});
   const cpMissed=[];D.teams.forEach(team=>{if(!team.prefColleagues.length)return;const paired=['friday','saturday'].some(day=>Object.values(S[day]||{}).some(hp=>Object.values(hp).some(arr=>{if(arr.length<2||!arr.includes(team.id))return false;return team.prefColleagues.some(cn=>{const col=D.teams.find(t=>t.name.toLowerCase()===cn.toLowerCase());return col&&arr.includes(col.id);});})));if(!paired)cpMissed.push(team.name+' → '+team.prefColleagues.join(', '));});
@@ -907,6 +929,7 @@ function renderGridPost(el){
   if(!hours.length){el.innerHTML='<div class="empty"><h3>GEEN SHIFTS</h3></div>';return;}
   let h=`<div class="sched-wrap"><table class="sched-grid">${buildGridHeader(hours,activeDay,'POST')}<tbody>`;
   D.posts.forEach((post,pi)=>{
+    if(!post.schedule[activeDay])return;
     const col=PPAL[pi%PPAL.length];const opk=isOpkuis(post);
     h+=`<tr><td class="row-h" style="border-left:3px solid ${col}${opk?';background:rgba(245,196,0,.06)':''}">
       <div style="color:${col};font-family:'Barlow Condensed';font-size:11px;font-weight:800;text-transform:uppercase;line-height:1.2">${post.name}</div>
@@ -926,7 +949,7 @@ function renderGridPost(el){
           h+=`<div class="chip" style="background:${col2}18;border-color:${col2}42;" draggable="true"
             ondragstart="dStart(event,'${tid}','${activeDay}',${hr},'${post.id}')" ondragend="dEnd(event)" title="${tm.members}">
             <span class="chip-name" style="color:${col2}">${tm.name}</span>
-            <span class="chip-members" style="color:${col2}">${tm.members}</span></div>`;
+            <span class="chip-members" style="color:${col2}">${(tm.members||'').split(',').map(m=>m.trim()).filter(Boolean).map(m=>'<span style="display:block">'+m+'</span>').join('')||'—'}</span></div>`;
         }else h+=`<div class="empty-slot"></div>`;
       }
       h+='</div></td>';
@@ -940,7 +963,7 @@ function renderGridTeam(el){
   const dd=S[activeDay]||{};const hours=Object.keys(dd).map(Number).sort((a,b)=>a-b);
   if(!hours.length){el.innerHTML='<div class="empty"><h3>GEEN SHIFTS</h3></div>';return;}
   const lk={};hours.forEach(hr=>{lk[hr]={};Object.entries(dd[hr]||{}).forEach(([pid,arr])=>arr.forEach(tid=>{lk[hr][tid]=pid;}));});
-  let teams=[...D.teams];const c=shiftCountsForDay(activeDay);
+  let teams=[...D.teams].filter(t=>getAv(t,activeDay));const c=shiftCountsForDay(activeDay);
   if(statSort==='count')teams.sort((a,b)=>(c[b.id]||0)-(c[a.id]||0));else teams.sort((a,b)=>a.name.localeCompare(b.name));
   let h=`<div class="sched-wrap"><table class="sched-grid">${buildGridHeader(hours,activeDay,'TEAM')}<tbody>`;
   teams.forEach(team=>{
@@ -961,7 +984,7 @@ function renderGridTeam(el){
           <div class="chip chip-sm" style="background:${pcol}1a;color:${pcol};border:1px solid ${pcol}38;cursor:grab;overflow:hidden;text-overflow:ellipsis;max-width:76px" title="${post?.name}">${post?.name||pid}</div></td>`;
       }else if(isBreak){
         h+=`<td style="text-align:center;background:rgba(245,196,0,.05)${pmB}" ondragover="dOverTeam(event,'${team.id}',${hr})" ondragleave="dLeave(event)" ondrop="dDropTeam(event,'${team.id}',${hr})">
-          <span style="font-size:8px;color:var(--gold);font-family:'Barlow Condensed';font-weight:700">★ PAUZE</span></td>`;
+          <span style="font-size:8px;color:var(--gold);font-family:'Barlow Condensed';font-weight:700">★ BANDS</span></td>`;
       }else{
         h+=`<td style="${pmB}" ondragover="dOverTeam(event,'${team.id}',${hr})" ondragleave="dLeave(event)" ondrop="dDropTeam(event,'${team.id}',${hr})">
           <span style="font-size:7px;color:var(--text-muted)">—</span></td>`;
@@ -986,8 +1009,8 @@ function renderTeamDetail(el){
         const acts2=actsForHour(hr,day);
         const actLabel=acts2.length?`<span style="color:var(--red);font-size:8px;margin-left:auto">🎵 ${acts2[0].name}</span>`:'';
         if(pid){const post=D.posts.find(p=>p.id===pid);const pcol=pc(pid);shifts++;h+=`<div class="tl-row working" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">${fh(hr)}</span><span class="tl-dot" style="background:${pcol}"></span><span>${post?.name||pid}</span></div>${actLabel}</div>`;}
-        else if(breaks.includes(hr)){h+=`<div class="tl-row onbreak" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">${fh(hr)}</span><span class="tl-dot" style="background:var(--gold)"></span><span style="color:var(--gold)">★ Pauze (voorkeur)</span></div>${actLabel}</div>`;}
-        else{h+=`<div class="tl-row free" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">${fh(hr)}</span><span style="color:var(--text-muted);font-size:9px">— vrij/pauze</span></div>${actLabel}</div>`;}
+        else if(breaks.includes(hr)){h+=`<div class="tl-row onbreak" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">${fh(hr)}</span><span class="tl-dot" style="background:var(--gold)"></span><span style="color:var(--gold)">★ Bands (voorkeur)</span></div>${actLabel}</div>`;}
+        else{h+=`<div class="tl-row free" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">${fh(hr)}</span><span style="color:var(--text-muted);font-size:9px">— vrij/bands</span></div>${actLabel}</div>`;}
       });
       h+=`</div><p style="margin-top:8px;font-size:11px;font-family:'Barlow Condensed';font-weight:600"><strong style="color:${col}">${shifts} SHIFT${shifts!==1?'S':''}</strong></p>`;}
     h+='</div>';
@@ -1025,6 +1048,7 @@ function dOver(ev){ev.preventDefault();ev.currentTarget.classList.add('drop-ok')
 function dLeave(ev){ev.currentTarget.classList.remove('drop-ok');}
 function dOverTeam(ev,tid,hr){ev.preventDefault();ev.currentTarget.classList.add('drop-ok');}
 
+function moveWarn(teamId,postId){var t=D.teams.find(function(x){return x.id===teamId;}),p=D.posts.find(function(x){return x.id===postId;});if(!t||!p)return'';var w=[];if(t.under18&&p.adults18)w.push(t.name+' (−18j) op +18j-post '+p.name);if(t.exclusivePost&&t.exclusivePost.toLowerCase()!==p.name.toLowerCase())w.push(t.name+' hoort enkel op '+t.exclusivePost);return w.join(' · ');}
 function performMove(teamId,srcDay,srcHour,srcPost,tgtDay,tgtHour,tgtPost){
   if(srcDay===tgtDay&&srcHour===tgtHour&&srcPost===tgtPost)return null;
   const team=D.teams.find(t=>t.id===teamId);const tPost=D.posts.find(p=>p.id===tgtPost);
@@ -1051,8 +1075,8 @@ function performMove(teamId,srcDay,srcHour,srcPost,tgtDay,tgtHour,tgtPost){
   if(!S[tgtDay][tgtHour][tgtPost].includes(teamId))S[tgtDay][tgtHour][tgtPost]=[...S[tgtDay][tgtHour][tgtPost],teamId];
   return null;
 }
-function dDrop(ev,day,hour,postId){ev.preventDefault();ev.currentTarget.classList.remove('drop-ok');if(!drag)return;if(!requireEdit())return;const{teamId,day:fd,hour:fhour,postId:fp}=drag;drag=null;const err=performMove(teamId,fd,fhour,fp,day,parseInt(hour),postId);if(err){toast('❌ '+err,'err');return;}renderStats();renderSchedView();renderValidation();scheduleCloudSave();}
-function dDropTeam(ev,tgtTeamId,tgtHour){ev.preventDefault();ev.currentTarget.classList.remove('drop-ok');if(!drag)return;const{teamId,day:srcDay,hour:srcHour,postId:srcPost}=drag;drag=null;const th=parseInt(tgtHour);if(tgtTeamId===teamId)return;const dd=S[activeDay]||{};const tgtPost=Object.keys(dd[th]||{}).find(pid=>(dd[th][pid]||[]).includes(tgtTeamId));if(!tgtPost){toast('⚠️ Sleep naar een post-cel in \'Per Post\' weergave voor vrije vakjes','info');return;}const err=performMove(teamId,srcDay,srcHour,srcPost,activeDay,th,tgtPost);if(err){toast('❌ '+err,'err');return;}renderStats();renderSchedView();renderValidation();scheduleCloudSave();}
+function dDrop(ev,day,hour,postId){ev.preventDefault();ev.currentTarget.classList.remove('drop-ok');if(!drag)return;if(!requireEdit())return;const{teamId,day:fd,hour:fhour,postId:fp}=drag;drag=null;const err=performMove(teamId,fd,fhour,fp,day,parseInt(hour),postId);if(err){toast('❌ '+err,'err');return;}renderStats();renderSchedView();renderValidation();scheduleCloudSave();var w=moveWarn(teamId,postId);if(w)toast('⚠️ '+w,'info');}
+function dDropTeam(ev,tgtTeamId,tgtHour){ev.preventDefault();ev.currentTarget.classList.remove('drop-ok');if(!drag)return;const{teamId,day:srcDay,hour:srcHour,postId:srcPost}=drag;drag=null;const th=parseInt(tgtHour);if(tgtTeamId===teamId)return;const dd=S[activeDay]||{};const tgtPost=Object.keys(dd[th]||{}).find(pid=>(dd[th][pid]||[]).includes(tgtTeamId));if(!tgtPost){toast('⚠️ Sleep naar een post-cel in \'Per Post\' weergave voor vrije vakjes','info');return;}const err=performMove(teamId,srcDay,srcHour,srcPost,activeDay,th,tgtPost);if(err){toast('❌ '+err,'err');return;}renderStats();renderSchedView();renderValidation();scheduleCloudSave();var w=moveWarn(teamId,tgtPost);if(w)toast('⚠️ '+w,'info');}
 
 function doExportXLS(){
   if(!S){toast('Geen rooster','err');return;}
@@ -1084,13 +1108,13 @@ function doExportXLS(){
       hours.forEach(hr=>{const av=getAv(team,day);const inR=av&&hr>=av.from&&hr<av.to;const isBreak=(team.breakPref[day]||[]).includes(hr);const pid=lk2[hr]?.[team.id];const pm=hr===24?'border-left:2px solid '+GOLD+';':'';
         if(!inR){html+=`<td style="background:#ececec${hr===24?';border-left:2px solid '+GOLD:''}"></td>`;return;}
         if(pid){const post=D.posts.find(p=>p.id===pid);const pcol=pc(pid);html+=`<td style="background:${pcol}18;color:${pcol};font-weight:bold;font-size:7pt;text-align:center;${pm}">${post?.name||pid}</td>`;}
-        else if(isBreak){html+=`<td class="break-c" style="${pm}">★ Pauze</td>`;}
+        else if(isBreak){html+=`<td class="break-c" style="${pm}">★ Bands</td>`;}
         else{html+=`<td style="color:#aaa;text-align:center;font-size:7pt;${pm}">—</td>`;}});html+='</tr>';});
     html+='</tbody></table><br>';
   });
   html+=`<h2 style="color:#d6168f;font-family:Calibri;margin:10px 0 4px">TEAM OVERZICHT</h2><table><thead><tr>
     <th style="background:#1a1a1a;color:#fff">Team</th><th style="background:#1a1a1a;color:#fff">Leden</th>
-    <th style="background:#1a1a1a;color:#fff">Pauze Vr.</th><th style="background:#1a1a1a;color:#fff">Pauze Za.</th>
+    <th style="background:#1a1a1a;color:#fff">Bands vrij</th><th style="background:#1a1a1a;color:#fff">Bands zat</th>
     <th style="background:#1a1a1a;color:#fff"># Vr.</th><th style="background:#1a1a1a;color:#fff"># Za.</th>
     <th style="background:#1a1a1a;color:#fff">Totaal</th></tr></thead><tbody>`;
   [...D.teams].sort((a,b)=>a.name.localeCompare(b.name)).forEach(t=>{
@@ -1131,7 +1155,7 @@ function doExportPDF(){
         hours.forEach(hr=>{const av=getAv(team,day);const inR=av&&hr>=av.from&&hr<av.to;const isBreak=(team.breakPref[day]||[]).includes(hr);const pid=lk2[hr]?.[team.id];const pm=hr===24?'border-left:2px solid '+GOLD:'';
           if(!inR){t+=`<td style="background:#f0f0f0;${pm}"></td>`;return;}
           if(pid){const post=D.posts.find(p=>p.id===pid);const pcol=pc(pid);t+=`<td style="background:${pcol}20;color:${pcol};font-weight:700;font-size:6.5pt;text-align:center;${pm}">${post?.name||pid}</td>`;}
-          else if(isBreak){t+=`<td style="background:#fffde0;color:#8a6000;font-size:6pt;text-align:center;${pm}">★ Pauze</td>`;}
+          else if(isBreak){t+=`<td style="background:#fffde0;color:#8a6000;font-size:6pt;text-align:center;${pm}">★ Bands</td>`;}
           else{t+=`<td style="color:#ccc;text-align:center;font-size:6pt;${pm}">—</td>`;}});t+='</tr>';});
     }
     return t+'</tbody></table></div>';
@@ -1157,11 +1181,11 @@ table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:2
 function dlTemplate(){
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([
-    ['Team','Leden','Vrijdag_Van','Vrijdag_Tot','Zaterdag_Van','Zaterdag_Tot','Voorkeur_Post','Voorkeur_Collega','Pauze_Vrijdag','Pauze_Zaterdag'],
-    ['Alpha','Jan Janssen, Piet Pieters','begin','einde',14,'einde','Ingang, Frontstage','Bravo','21','22,24'],
-    ['Bravo','Lisa Van Den Berg, Tom Smeets',19,'einde',12,25,'Ingang','Alpha','22,23',''],
-    ['Charlie','Sara Claes, Koen Leclercq','begin',25,12,24,'VIP','','','20,23'],
-    ['Delta','Nina Willems, Marc Hermans',20,'einde',14,'einde','','','',''],
+    ['Team','Leden','Vrijdag_Van','Vrijdag_Tot','Zaterdag_Van','Zaterdag_Tot','Voorkeur_Post','Voorkeur_Collega','Bands_Vrijdag','Bands_Zaterdag','Post_uitsluitend','-18j'],
+    ['Alpha','Jan Janssen, Piet Pieters','begin','einde',14,'einde','Ingang, Frontstage','Bravo','21','22,24','',''],
+    ['Bravo','Lisa Van Den Berg, Tom Smeets',19,'einde',12,25,'Ingang','Alpha','22,23','','VIP',''],
+    ['Charlie','Sara Claes, Koen Leclercq','begin',25,12,24,'VIP','','','20,23','','x'],
+    ['Delta','Nina Willems, Marc Hermans',20,'einde',14,'einde','','','','','',''],
   ]),'Teams');
   XLSX.writeFile(wb,'grensrock-template.xlsx');toast('📥 Template gedownload!','ok');
 }
@@ -1201,7 +1225,7 @@ header{background:#0b0b0b;border-bottom:3px solid var(--red);padding:0 22px;heig
 .cell-content{display:flex;flex-direction:column;gap:2px;min-height:26px;padding:2px;}
 .chip{display:inline-flex;flex-direction:column;padding:3px 6px;border-radius:4px;font-family:'Barlow Condensed',sans-serif;border:1px solid transparent;line-height:1.2;width:100%;}
 .chip-name{font-size:10px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;}
-.chip-members{font-size:8px;font-weight:400;opacity:.72;font-family:'Barlow',sans-serif;}
+.chip-members{font-size:10px;font-weight:400;opacity:.82;font-family:'Barlow',sans-serif;line-height:1.25;}
 .chip-sm{font-size:9px;padding:2px 6px;font-weight:700;flex-direction:row;align-items:center;width:auto;white-space:nowrap;}
 .empty-slot{height:22px;border-radius:3px;border:1px dashed var(--text-muted);opacity:.3;margin:1px 0;}
 .card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:17px;margin-bottom:15px;}
@@ -1245,9 +1269,9 @@ function onFilterType(){filterType=document.getElementById('flt-type').value;var
 function onFilterVal(){filterVal=document.getElementById('flt-val').value;renderView();}
 function renderView(){if(filterType==='team'&&filterVal){renderTeamDetail();}else if(filterType==='post'&&filterVal){renderPostDetail();}else if(activeView==='post'){renderGridPost();}else{renderGridTeam();}}
 function buildGH(hours,label){var h='<thead><tr><th class="row-h" style="position:sticky;top:0;left:0;z-index:5">'+label+'</th>';hours.forEach(function(hr){h+='<th style="'+(hr===24?'border-left:2px solid rgba(245,196,0,.5);color:var(--gold)':'')+'">'+(isPM(hr)?'<span style="color:var(--gold)">':'')+fh(hr)+(isPM(hr)?'</span>':'')+'</th>';});return h+'</tr></thead>';}
-function renderGridPost(){var dd=S[activeDay]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var el=document.getElementById('sched-view');if(!hours.length){el.innerHTML='<p style="padding:40px;color:var(--text-dim)">Geen shifts</p>';return;}var h='<div class="sched-wrap"><table class="sched-grid">'+buildGH(hours,'POST')+'<tbody>';D.posts.forEach(function(post,pi){var col=PPAL[pi%PPAL.length];var opk=isOpkuis(post);h+='<tr><td class="row-h" style="border-left:3px solid '+col+(opk?';background:rgba(245,196,0,.06)':'')+'">'+'<div style="color:'+col+';font-family:Barlow Condensed;font-size:11px;font-weight:800;text-transform:uppercase">'+post.name+'</div>'+(opk?'<div style="font-size:8px;color:var(--gold);font-weight:700">ALLE TEAMS</div>':'')+'</td>';hours.forEach(function(hr){var ps=post.schedule[activeDay];var active=ps&&hr>=ps.from&&hr<ps.to;var pm=hr===24;if(!active){h+='<td class="inactive" style="'+(pm?'border-left:2px solid rgba(245,196,0,.3)':'')+'"></td>';return;}var assigned=(dd[hr]&&dd[hr][post.id])?dd[hr][post.id]:[];var need=getNeed(post,activeDay,hr);h+='<td style="background:'+(need===2?'rgba(200,16,30,.04)':opk?'rgba(245,196,0,.03)':'transparent')+(pm?';border-left:2px solid rgba(245,196,0,.3)':'')+'">'+'<div class="cell-content">';for(var s=0;s<(opk?assigned.length:need);s++){if(s<assigned.length){var tid=assigned[s];var tm=D.teams.find(function(t){return t.id===tid;});if(!tm)continue;var c2=tc(tid);h+='<div class="chip" style="background:'+c2+'18;border-color:'+c2+'42"><span class="chip-name" style="color:'+c2+'">'+tm.name+'</span><span class="chip-members" style="color:'+c2+'">'+tm.members+'</span></div>';}else h+='<div class="empty-slot"></div>';}h+='</div></td>';});h+='</tr>';});h+='</tbody></table></div>';el.innerHTML=h;}
-function renderGridTeam(){var dd=S[activeDay]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var el=document.getElementById('sched-view');if(!hours.length){el.innerHTML='<p style="padding:40px;color:var(--text-dim)">Geen shifts</p>';return;}var lk={};hours.forEach(function(hr){lk[hr]={};Object.entries(dd[hr]||{}).forEach(function(e){e[1].forEach(function(tid){lk[hr][tid]=e[0];});});});var teams=[].concat(D.teams).sort(function(a,b){return a.name.localeCompare(b.name);});var h='<div class="sched-wrap"><table class="sched-grid">'+buildGH(hours,'TEAM')+'<tbody>';teams.forEach(function(team){var col=tc(team.id);h+='<tr><td class="row-h" style="border-left:3px solid '+col+'"><div style="color:'+col+';font-weight:800;font-size:11px;text-transform:uppercase">'+team.name+'</div><div style="color:'+col+';font-size:8px;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:125px">'+team.members+'</div></td>';hours.forEach(function(hr){var av=getAv(team,activeDay);var inR=av&&hr>=av.from&&hr<av.to;var isBreak=(team.breakPref[activeDay]||[]).indexOf(hr)>=0;var pid=lk[hr]?lk[hr][team.id]:null;var pm=hr===24?';border-left:2px solid rgba(245,196,0,.3)':'';if(!inR){h+='<td class="inactive" style="'+(hr===24?'border-left:2px solid rgba(245,196,0,.3)':'')+'"></td>';return;}if(pid){var post=D.posts.find(function(p){return p.id===pid;});var pcol=pc(pid);h+='<td style="background:'+pcol+'0d'+pm+'"><div class="chip chip-sm" style="background:'+pcol+'1a;color:'+pcol+';border:1px solid '+pcol+'38;overflow:hidden;text-overflow:ellipsis;max-width:76px">'+(post?post.name:pid)+'</div></td>';}else if(isBreak){h+='<td style="text-align:center;background:rgba(245,196,0,.05)'+pm+'"><span style="font-size:8px;color:var(--gold);font-weight:700">★ PAUZE</span></td>';}else{h+='<td style="'+pm+'"><span style="font-size:7px;color:var(--text-muted)">—</span></td>';}});h+='</tr>';});h+='</tbody></table></div>';el.innerHTML=h;}
-function renderTeamDetail(){var team=D.teams.find(function(t){return t.id===filterVal;});if(!team)return;var col=tc(team.id);var el=document.getElementById('sched-view');var h='<div class="card" style="border-color:'+col+'40"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-family:Anton;font-size:11px;letter-spacing:2px;color:'+col+';text-transform:uppercase">'+team.name+'</span><span class="badge">'+team.members+'</span></div><div class="two-day">';['friday','saturday'].forEach(function(day){var av=getAv(team,day);var dd=S[day]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var breaks=team.breakPref[day]||[];h+='<div class="day-card"><h4>'+(day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06')+'</h4>';if(!av){h+='<p style="color:var(--text-muted);font-size:11px">Niet aanwezig</p>';}else{var shifts=0;var pmShown=false;h+='<div style="display:flex;flex-direction:column;gap:2px">';hours.forEach(function(hr){if(hr<av.from||hr>=av.to)return;if(isPM(hr)&&!pmShown){pmShown=true;h+='<div style="font-size:8px;color:var(--gold);padding:2px 7px;font-weight:700">⬥ MIDDERNACHT</div>';}var pid=Object.keys(dd[hr]||{}).find(function(p){return(dd[hr][p]||[]).indexOf(team.id)>=0;});var acts2=actsForHour(hr,day);var actLabel=acts2.length?'<span style="color:var(--red);font-size:8px;margin-left:auto">🎵 '+acts2[0].name+'</span>':'';if(pid){var post=D.posts.find(function(p){return p.id===pid;});var pcol=pc(pid);shifts++;h+='<div class="tl-row working" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">'+fh(hr)+'</span><span class="tl-dot" style="background:'+pcol+'"></span><span>'+(post?post.name:pid)+'</span></div>'+actLabel+'</div>';}else if(breaks.indexOf(hr)>=0){h+='<div class="tl-row onbreak" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">'+fh(hr)+'</span><span class="tl-dot" style="background:var(--gold)"></span><span style="color:var(--gold)">★ Pauze</span></div>'+actLabel+'</div>';}else{h+='<div class="tl-row free" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">'+fh(hr)+'</span><span style="color:var(--text-muted);font-size:9px">— vrij/pauze</span></div>'+actLabel+'</div>';}});h+='</div><p style="margin-top:8px;font-size:11px;font-weight:600"><strong style="color:'+col+'">'+shifts+' SHIFT'+(shifts!==1?'S':'')+'</strong></p>';}h+='</div>';});h+='</div></div>';el.innerHTML=h;}
+function renderGridPost(){var dd=S[activeDay]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var el=document.getElementById('sched-view');if(!hours.length){el.innerHTML='<p style="padding:40px;color:var(--text-dim)">Geen shifts</p>';return;}var h='<div class="sched-wrap"><table class="sched-grid">'+buildGH(hours,'POST')+'<tbody>';D.posts.forEach(function(post,pi){if(!post.schedule[activeDay])return;var col=PPAL[pi%PPAL.length];var opk=isOpkuis(post);h+='<tr><td class="row-h" style="border-left:3px solid '+col+(opk?';background:rgba(245,196,0,.06)':'')+'">'+'<div style="color:'+col+';font-family:Barlow Condensed;font-size:11px;font-weight:800;text-transform:uppercase">'+post.name+'</div>'+(opk?'<div style="font-size:8px;color:var(--gold);font-weight:700">ALLE TEAMS</div>':'')+'</td>';hours.forEach(function(hr){var ps=post.schedule[activeDay];var active=ps&&hr>=ps.from&&hr<ps.to;var pm=hr===24;if(!active){h+='<td class="inactive" style="'+(pm?'border-left:2px solid rgba(245,196,0,.3)':'')+'"></td>';return;}var assigned=(dd[hr]&&dd[hr][post.id])?dd[hr][post.id]:[];var need=getNeed(post,activeDay,hr);h+='<td style="background:'+(need===2?'rgba(200,16,30,.04)':opk?'rgba(245,196,0,.03)':'transparent')+(pm?';border-left:2px solid rgba(245,196,0,.3)':'')+'">'+'<div class="cell-content">';for(var s=0;s<(opk?assigned.length:need);s++){if(s<assigned.length){var tid=assigned[s];var tm=D.teams.find(function(t){return t.id===tid;});if(!tm)continue;var c2=tc(tid);h+='<div class="chip" style="background:'+c2+'18;border-color:'+c2+'42"><span class="chip-name" style="color:'+c2+'">'+tm.name+'</span><span class="chip-members" style="color:'+c2+'">'+(tm.members||'').split(',').map(function(m){return m.trim();}).filter(Boolean).map(function(m){return '<span style="display:block">'+m+'</span>';}).join('')+'</span></div>';}else h+='<div class="empty-slot"></div>';}h+='</div></td>';});h+='</tr>';});h+='</tbody></table></div>';el.innerHTML=h;}
+function renderGridTeam(){var dd=S[activeDay]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var el=document.getElementById('sched-view');if(!hours.length){el.innerHTML='<p style="padding:40px;color:var(--text-dim)">Geen shifts</p>';return;}var lk={};hours.forEach(function(hr){lk[hr]={};Object.entries(dd[hr]||{}).forEach(function(e){e[1].forEach(function(tid){lk[hr][tid]=e[0];});});});var teams=[].concat(D.teams).filter(function(t){return getAv(t,activeDay);}).sort(function(a,b){return a.name.localeCompare(b.name);});var h='<div class="sched-wrap"><table class="sched-grid">'+buildGH(hours,'TEAM')+'<tbody>';teams.forEach(function(team){var col=tc(team.id);h+='<tr><td class="row-h" style="border-left:3px solid '+col+'"><div style="color:'+col+';font-weight:800;font-size:11px;text-transform:uppercase">'+team.name+'</div><div style="color:'+col+';font-size:8px;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:125px">'+team.members+'</div></td>';hours.forEach(function(hr){var av=getAv(team,activeDay);var inR=av&&hr>=av.from&&hr<av.to;var isBreak=(team.breakPref[activeDay]||[]).indexOf(hr)>=0;var pid=lk[hr]?lk[hr][team.id]:null;var pm=hr===24?';border-left:2px solid rgba(245,196,0,.3)':'';if(!inR){h+='<td class="inactive" style="'+(hr===24?'border-left:2px solid rgba(245,196,0,.3)':'')+'"></td>';return;}if(pid){var post=D.posts.find(function(p){return p.id===pid;});var pcol=pc(pid);h+='<td style="background:'+pcol+'0d'+pm+'"><div class="chip chip-sm" style="background:'+pcol+'1a;color:'+pcol+';border:1px solid '+pcol+'38;overflow:hidden;text-overflow:ellipsis;max-width:76px">'+(post?post.name:pid)+'</div></td>';}else if(isBreak){h+='<td style="text-align:center;background:rgba(245,196,0,.05)'+pm+'"><span style="font-size:8px;color:var(--gold);font-weight:700">★ BANDS</span></td>';}else{h+='<td style="'+pm+'"><span style="font-size:7px;color:var(--text-muted)">—</span></td>';}});h+='</tr>';});h+='</tbody></table></div>';el.innerHTML=h;}
+function renderTeamDetail(){var team=D.teams.find(function(t){return t.id===filterVal;});if(!team)return;var col=tc(team.id);var el=document.getElementById('sched-view');var h='<div class="card" style="border-color:'+col+'40"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-family:Anton;font-size:11px;letter-spacing:2px;color:'+col+';text-transform:uppercase">'+team.name+'</span><span class="badge">'+team.members+'</span></div><div class="two-day">';['friday','saturday'].forEach(function(day){var av=getAv(team,day);var dd=S[day]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var breaks=team.breakPref[day]||[];h+='<div class="day-card"><h4>'+(day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06')+'</h4>';if(!av){h+='<p style="color:var(--text-muted);font-size:11px">Niet aanwezig</p>';}else{var shifts=0;var pmShown=false;h+='<div style="display:flex;flex-direction:column;gap:2px">';hours.forEach(function(hr){if(hr<av.from||hr>=av.to)return;if(isPM(hr)&&!pmShown){pmShown=true;h+='<div style="font-size:8px;color:var(--gold);padding:2px 7px;font-weight:700">⬥ MIDDERNACHT</div>';}var pid=Object.keys(dd[hr]||{}).find(function(p){return(dd[hr][p]||[]).indexOf(team.id)>=0;});var acts2=actsForHour(hr,day);var actLabel=acts2.length?'<span style="color:var(--red);font-size:8px;margin-left:auto">🎵 '+acts2[0].name+'</span>':'';if(pid){var post=D.posts.find(function(p){return p.id===pid;});var pcol=pc(pid);shifts++;h+='<div class="tl-row working" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">'+fh(hr)+'</span><span class="tl-dot" style="background:'+pcol+'"></span><span>'+(post?post.name:pid)+'</span></div>'+actLabel+'</div>';}else if(breaks.indexOf(hr)>=0){h+='<div class="tl-row onbreak" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">'+fh(hr)+'</span><span class="tl-dot" style="background:var(--gold)"></span><span style="color:var(--gold)">★ Bands</span></div>'+actLabel+'</div>';}else{h+='<div class="tl-row free" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">'+fh(hr)+'</span><span style="color:var(--text-muted);font-size:9px">— vrij/bands</span></div>'+actLabel+'</div>';}});h+='</div><p style="margin-top:8px;font-size:11px;font-weight:600"><strong style="color:'+col+'">'+shifts+' SHIFT'+(shifts!==1?'S':'')+'</strong></p>';}h+='</div>';});h+='</div></div>';el.innerHTML=h;}
 function renderPostDetail(){var post=D.posts.find(function(p){return p.id===filterVal;});if(!post)return;var col=pc(filterVal);var el=document.getElementById('sched-view');var h='<div class="card" style="border-color:'+col+'40"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-family:Anton;font-size:11px;letter-spacing:2px;color:'+col+';text-transform:uppercase">'+post.name+'</span><span class="badge">variabel teams/uur</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">';['friday','saturday'].forEach(function(day){var ps=post.schedule[day];var dd=S[day]||{};h+='<div class="day-card"><h4>'+(day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06')+'</h4>';if(!ps){h+='<p style="color:var(--text-muted);font-size:11px">Post niet actief</p>';}else{h+='<div style="display:flex;flex-direction:column;gap:2px">';var pmShown=false;for(var hr=ps.from;hr<ps.to;hr++){if(isPM(hr)&&!pmShown){pmShown=true;h+='<div style="font-size:8px;color:var(--gold);padding:2px 7px;font-weight:700">⬥ MIDDERNACHT</div>';}var arr=(dd[hr]&&dd[hr][post.id])?dd[hr][post.id]:[];var need=getNeed(post,day,hr);var miss=need-arr.length;var acts2=actsForHour(hr,day);var actStr=acts2.length?'<span style="color:var(--red);font-size:8px;margin-left:auto">🎵 '+acts2[0].name+'</span>':'';h+='<div style="display:flex;align-items:center;gap:5px;padding:3px 7px;background:var(--bg);border-radius:3px;border:1px solid '+(miss>0&&!isOpkuis(post)?'var(--red)':'var(--border)')+'"><span style="font-family:JetBrains Mono;font-size:9px;color:'+(isPM(hr)?'var(--gold)':'var(--text-dim)')+';width:38px;flex-shrink:0">'+fh(hr)+'</span><span style="font-size:8px;color:'+(need===2?'var(--gold)':'var(--text-muted)')+';width:12px;flex-shrink:0">'+(need===2?'②':'①')+'</span><div style="display:flex;gap:2px;flex-wrap:wrap;flex:1">';if(!arr.length){h+='<span style="font-size:9px;color:var(--text-muted);font-style:italic">leeg</span>';}else{arr.forEach(function(tid){var tm=D.teams.find(function(t){return t.id===tid;});if(!tm)return;var tcol2=TPAL[D.teams.indexOf(tm)%TPAL.length];h+='<span class="chip chip-sm" style="background:'+tcol2+'18;color:'+tcol2+';border:1px solid '+tcol2+'38">'+tm.name+'</span>';});}h+='</div>'+actStr+'</div>';}h+='</div>';}h+='</div>';});h+='</div></div>';el.innerHTML=h;}
 document.getElementById('hdr-controls').innerHTML='<div class="pill-tabs"><button class="pill-tab active" onclick="switchDay(\'friday\')" id="dt-fri">Vrijdag</button><button class="pill-tab" onclick="switchDay(\'saturday\')" id="dt-sat">Zaterdag</button></div>'+'<div class="pill-tabs"><button class="pill-tab active" onclick="switchView(\'post\')" id="vt-post">Per Post</button><button class="pill-tab" onclick="switchView(\'team\')" id="vt-team">Per Team</button></div>'+'<div style="display:flex;align-items:center;gap:5px"><span style="font-size:10px;color:var(--text-dim);font-family:Barlow Condensed;text-transform:uppercase">Filter:</span><select class="filter-select" id="flt-type" onchange="onFilterType()"><option value="all">Alles</option><option value="team">Team</option><option value="post">Post</option></select><select class="filter-select" id="flt-val" style="display:none" onchange="onFilterVal()"></select></div>';
 var ts=new Date(DATA.ts);document.getElementById('ts-info').textContent='Gepubliceerd '+ts.toLocaleDateString('nl-BE')+' '+ts.toLocaleTimeString('nl-BE');
@@ -1273,6 +1297,7 @@ function toast(msg,type='ok'){const t=document.getElementById('toast');t.textCon
   document.querySelectorAll('#sec-invoer table.data-table').forEach(makeColsResizable);
   window.addEventListener('hashchange', route);
   route();
+  if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(function(){}); }
 })();
 </script>
 </body>
