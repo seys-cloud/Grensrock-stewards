@@ -236,6 +236,9 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
   <div style="display:flex;gap:6px;align-items:center;">
     <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Dark/Light modus">🌙</button>
     <button class="btn btn-ghost btn-sm" id="btn-regen" style="display:none" onclick="doGenerate()">↺ Regenereer</button>
+    <button class="btn btn-ghost btn-sm" id="btn-backup" onclick="exportState()" title="Exporteer de volledige staat (teams, posten, timetable, rooster) als JSON — herstelpunt">💾 Backup</button>
+    <button class="btn btn-ghost btn-sm" id="btn-restore" onclick="document.getElementById('restore-input').click()" title="Importeer een eerder geëxporteerde backup (JSON)">⤴ Herstel</button>
+    <input type="file" id="restore-input" accept=".json,application/json" style="display:none" onchange="importState(this.files[0]); this.value='';">
     <button class="btn btn-primary btn-sm" id="btn-publish" style="display:none" onclick="publishRooster()" title="Publiceer het rooster naar de teamweergave">📤 Publiceer</button>
     <button class="btn btn-sec btn-sm" id="btn-xls" style="display:none" onclick="doExportXLS()">⬇ Excel</button>
     <button class="btn btn-gold btn-sm" id="btn-pdf" style="display:none" onclick="doExportPDF()">🖨 PDF</button>
@@ -433,6 +436,36 @@ function applyState(data){ if(!data) return false; let ch=false;
   if(Array.isArray(data.posts)){ D.posts=data.posts; ch=true; }
   if(data.timetable){ D.timetable=data.timetable; ch=true; }
   if(data.schedule){ S=data.schedule; } return ch; }
+/* ===== Veiligheidsnet: volledige staat exporteren/importeren als JSON ===== */
+function exportState(){
+  try{
+    var state=currentState();
+    var blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+    var d=new Date(), pad=function(n){return String(n).padStart(2,'0');};
+    var name='grensrock-stewards-backup-'+d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+'.json';
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=name; a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+    toast('💾 Backup gedownload ('+(D.teams.length)+' teams, '+(D.posts.length)+' posten)','ok');
+  }catch(e){ toast('❌ Backup mislukt: '+e.message,'err'); }
+}
+function importState(file){
+  if(!requireEdit()) return;
+  if(!file) return;
+  if(!confirm('De huidige staat vervangen door deze backup?\n\nDit overschrijft de online data (teams, posten, timetable én het rooster) voor iedereen.')) return;
+  var r=new FileReader();
+  r.onload=function(e){
+    try{
+      var data=JSON.parse(e.target.result);
+      if(!data || (!Array.isArray(data.teams) && !Array.isArray(data.posts))) throw new Error('geen geldige backup');
+      applyState(data);
+      savePersistent();
+      renderEverything();
+      toast('⤴ Backup geïmporteerd — wordt online opgeslagen','ok');
+    }catch(err){ toast('❌ Import mislukt: '+err.message,'err'); }
+  };
+  r.readAsText(file);
+}
 function requireEdit(){ if(!editMode){ toast('🔒 Log in om te bewerken','info'); return false; } return true; }
 function scheduleCloudSave(){ if(!editMode||!sb||_applyingRemote) return; clearTimeout(_saveTimer); _saveTimer=setTimeout(cloudSaveNow,800); }
 async function cloudSaveNow(){ if(!editMode||!sb) return;
