@@ -243,8 +243,8 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
   <div style="display:flex;gap:6px;align-items:center;">
     <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Dark/Light modus">🌙</button>
     <button class="btn btn-ghost btn-sm" id="btn-regen" style="display:none" onclick="doGenerate()">↺ Regenereer</button>
-    <button class="btn btn-ghost btn-sm" id="btn-backup" onclick="exportState()" title="Exporteer de volledige staat (teams, posten, timetable, rooster) als JSON — herstelpunt">💾 Backup</button>
-    <button class="btn btn-ghost btn-sm" id="btn-restore" onclick="document.getElementById('restore-input').click()" title="Importeer een eerder geëxporteerde backup (JSON)">⤴ Herstel</button>
+    <button class="btn btn-ghost btn-sm" id="btn-backup" onclick="exportState()" title="Backup: exporteer de volledige staat (teams, posten, timetable, rooster) als JSON">💾</button>
+    <button class="btn btn-ghost btn-sm" id="btn-restore" onclick="document.getElementById('restore-input').click()" title="Herstel: importeer een eerder geëxporteerde backup (JSON)">⤴</button>
     <input type="file" id="restore-input" accept=".json,application/json" style="display:none" onchange="importState(this.files[0]); this.value='';">
     <button class="btn btn-primary btn-sm" id="btn-publish" style="display:none" onclick="publishRooster()" title="Publiceer het rooster naar de teamweergave">📤 Publiceer</button>
     <button class="btn btn-sec btn-sm" id="btn-xls" style="display:none" onclick="doExportXLS()">⬇ Excel</button>
@@ -569,12 +569,15 @@ const avStr=a=>{
 function toggleTheme(){darkMode=!darkMode;applyTheme();try{localStorage.setItem('gr_theme',darkMode?'dark':'light');}catch(e){}}
 function applyTheme(){document.body.classList.toggle('light',!darkMode);var tb=document.getElementById('theme-btn');if(tb)tb.textContent=darkMode?'🌙':'☀️';
   /* her-render zodat ingebakken kleuren (timetable-bg) meeschakelen — lost wit/zwart-bug op */
-  try{renderInputTables();renderTimetableInvoer();if(S){renderStats();renderSchedView();renderValidation();}}catch(e){}}
+  try{renderInputTables();renderTimetableInvoer();if(S){renderStats();renderSchedView();renderValidation();}}catch(e){}
+  /* in read-only (mobiel) opnieuw verbergen wat niet getoond mag worden */
+  try{applyModeUI();}catch(e){}}
 let col1Width=parseInt((function(){try{return localStorage.getItem('gr_col1');}catch(e){return null;}})()||'150')||150;
 function applyCol1Width(){document.documentElement.style.setProperty('--col1-width',col1Width+'px');}
 function setHourColWidth(px){document.documentElement.style.setProperty('--hcol',Math.round(px)+'px');}
-function longestMemberPx(){var max=0;D.teams.forEach(function(t){(t.members||'').split(',').forEach(function(m){var l=m.trim().length;if(l>max)max=l;});});return Math.max(96,max*6.6+22);}
-function longestPostWordPx(){var max=0;D.posts.forEach(function(p){(p.name||'').split(' ').forEach(function(w){if(w.length>max)max=w.length;});});return Math.max(90,max*5.8+22);}
+function measureTextPx(text,font){var c=measureTextPx._c||(measureTextPx._c=document.createElement('canvas'));var ctx=c.getContext('2d');ctx.font=font;return ctx.measureText(text||'').width;}
+function longestMemberPx(){var max=0;D.teams.forEach(function(t){(t.members||'').split(',').forEach(function(m){var w=measureTextPx(m.trim(),'400 10px Barlow, Arial, sans-serif');if(w>max)max=w;});});/* +1px per teken extra marge voor renderverschillen + cel/chip-padding */var pad=38;return Math.min(260,Math.max(96,Math.ceil(max*1.06)+pad));}
+function longestPostWordPx(){var max=0;D.posts.forEach(function(p){(p.name||'').split(' ').forEach(function(w){var px=measureTextPx(w,'700 9px "Barlow Condensed", Arial, sans-serif');if(px>max)max=px;});});var pad=30;return Math.min(220,Math.max(90,Math.ceil(max*1.08)+pad));}
 function startCol1Resize(e){e.preventDefault();e.stopPropagation();var sx=e.clientX,sw=col1Width;
   function mv(ev){col1Width=Math.max(80,Math.min(460,sw+(ev.clientX-sx)));applyCol1Width();}
   function up(){document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);try{localStorage.setItem('gr_col1',col1Width);}catch(e){}}
@@ -1376,6 +1379,7 @@ function toast(msg,type='ok'){const t=document.getElementById('toast');t.textCon
   if(!loaded){ const hasSaved=loadPersistent(); if(!hasSaved)initDefaultPostsAndTimetable(); }
   subscribeRealtime();
   renderEverything();
+  if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){try{if(S)renderSchedView();}catch(e){}});}
   document.querySelectorAll('#sec-invoer table.data-table').forEach(makeColsResizable);
   window.addEventListener('hashchange', route);
   route();
