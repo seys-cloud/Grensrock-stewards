@@ -407,11 +407,11 @@ body.light .pg-light{display:inline-block;}
       </select>
       <select class="filter-select" id="flt-val" style="display:none" onchange="onFilterVal()"></select>
     </div>
-    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto">
-      <button class="btn btn-ghost btn-sm" id="btn-regen" style="display:none" onclick="doGenerate()">↺ Regenereer</button>
-      <button class="btn btn-primary btn-sm" id="btn-publish" style="display:none" onclick="publishRooster()" title="Publiceer het rooster naar de teamweergave">📤 Publiceer</button>
-      <button class="btn btn-sec btn-sm" id="btn-xls" style="display:none" onclick="doExportXLS()">⬇ Excel</button>
-      <button class="btn btn-gold btn-sm" id="btn-pdf" style="display:none" onclick="doExportPDF()">🖨 PDF</button>
+    <div id="rooster-actions" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto">
+      <button class="btn btn-ghost btn-sm" id="btn-regen" onclick="doGenerate()">↺ Regenereer</button>
+      <button class="btn btn-primary btn-sm" id="btn-publish" onclick="publishRooster()" title="Publiceer het rooster naar de teamweergave">📤 Publiceer</button>
+      <button class="btn btn-sec btn-sm" id="btn-xls" onclick="doExportXLS()">⬇ Excel</button>
+      <button class="btn btn-gold btn-sm" id="btn-pdf" onclick="doExportPDF()">🖨 PDF</button>
     </div>
   </div>
   <div id="validation-panel" style="display:none;margin-bottom:11px"></div>
@@ -527,7 +527,7 @@ function buildAuthControls(){
   wrap.innerHTML='<span id="sync-badge" style="color:var(--text-dim);font-weight:600;font-size:11px"></span><button id="auth-btn" class="theme-btn" type="button" style="white-space:nowrap"></button>';
   grp.insertBefore(wrap, grp.firstChild);
 }
-function applyModeUI(){ var view=(appMode==='view'); var tabs=document.querySelectorAll('.nav-tab'); if(tabs[0]) tabs[0].style.display=view?'none':''; if(tabs[1]) tabs[1].style.display=view?'none':''; var rg=document.getElementById('btn-regen'); if(rg&&view) rg.style.display='none'; var pb=document.getElementById('btn-publish'); if(pb&&view) pb.style.display='none'; ['btn-xls','btn-pdf'].forEach(function(id){ var el=document.getElementById(id); if(el&&view) el.style.display='none'; }); var vp=document.getElementById('validation-panel'); if(vp&&view) vp.style.display='none'; var sc=document.getElementById('stats-card'); if(sc) sc.style.display=view?'none':''; ['btn-backup','btn-restore'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display=view?'none':'';}); var aw=document.getElementById('auth-wrap'); if(aw)aw.style.display=view?'none':''; if(view){var _act=document.querySelector('.section.active');var _id=_act?_act.id:'';if(!_act||_id==='sec-upload'||_id==='sec-invoer')goTab('rooster');} }
+function applyModeUI(){ var view=(appMode==='view'); var tabs=document.querySelectorAll('.nav-tab'); if(tabs[0]) tabs[0].style.display=view?'none':''; if(tabs[1]) tabs[1].style.display=view?'none':''; var ra=document.getElementById('rooster-actions'); if(ra) ra.style.display=view?'none':'flex'; var vp=document.getElementById('validation-panel'); if(vp&&view) vp.style.display='none'; var sc=document.getElementById('stats-card'); if(sc) sc.style.display=view?'none':''; ['btn-backup','btn-restore'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display=view?'none':'';}); var aw=document.getElementById('auth-wrap'); if(aw)aw.style.display=view?'none':''; if(view){var _act=document.querySelector('.section.active');var _id=_act?_act.id:'';if(!_act||_id==='sec-upload'||_id==='sec-invoer')goTab('rooster');} }
 function showApp(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(l)l.style.display='none'; if(g)g.style.display='none'; applyModeUI(); }
 function showLanding(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(g)g.style.display='none'; if(l)l.style.display='flex'; }
 function showLoginOverlay(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(l)l.style.display='none'; if(g)g.style.display='flex'; var em=document.getElementById('login-email'); if(em) setTimeout(function(){em.focus();},50); }
