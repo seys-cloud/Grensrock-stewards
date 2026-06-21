@@ -605,6 +605,8 @@ function _measureMax(strings,cssText){
 }
 function longestMemberPx(){var names=[];D.teams.forEach(function(t){(t.members||'').split(',').forEach(function(s){s=s.trim();if(s)names.push(s);});});var w=_measureMax(names,"font-family:'Barlow',Arial,sans-serif;font-size:10px;font-weight:400;");return Math.min(360,Math.max(110,Math.ceil(w)+42));}
 function longestPostWordPx(){var words=[];D.posts.forEach(function(p){(p.name||'').split(' ').forEach(function(s){s=s.trim();if(s)words.push(s);});});var w=_measureMax(words,"font-family:'Barlow Condensed',Arial,sans-serif;font-size:9px;font-weight:700;");return Math.min(280,Math.max(96,Math.ceil(w)+28));}
+function isMobileView(){return window.matchMedia('(max-width:768px)').matches;}
+function longestPostWordCol1Px(){var words=[];D.posts.forEach(function(p){(p.name||'').split(' ').forEach(function(s){s=s.trim();if(s)words.push(s);});});var w=_measureMax(words,"font-family:'Barlow Condensed',Arial,sans-serif;font-size:11px;font-weight:800;text-transform:uppercase;");return Math.ceil(w)+26;}
 function startCol1Resize(e){e.preventDefault();e.stopPropagation();var sx=e.clientX,sw=col1Width;
   function mv(ev){col1Width=Math.max(80,Math.min(460,sw+(ev.clientX-sx)));applyCol1Width();}
   function up(){document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);try{localStorage.setItem('gr_col1',col1Width);}catch(e){}}
@@ -1045,13 +1047,15 @@ function buildGridHeader(hours,day,rowLabel){
 function renderGridPost(el){
   const dd=S[activeDay]||{};const hours=Object.keys(dd).map(Number).sort((a,b)=>a-b);
   if(!hours.length){el.innerHTML='<div class="empty"><h3>GEEN SHIFTS</h3></div>';return;}
+  const mobP=isMobileView();
+  if(mobP)document.documentElement.style.setProperty('--col1-width',longestPostWordCol1Px()+'px');else applyCol1Width();
   setHourColWidth(longestMemberPx());
   let h=`<div class="sched-wrap"><table class="sched-grid">${buildGridHeader(hours,activeDay,'POST')}<tbody>`;
   D.posts.forEach((post,pi)=>{
     if(!post.schedule[activeDay])return;
     const col=PPAL[pi%PPAL.length];const opk=isOpkuis(post);
     h+=`<tr><td class="row-h" style="border-left:3px solid ${col}${opk?';background:rgba(245,196,0,.06)':''}">
-      <div style="color:${col};font-family:'Barlow Condensed';font-size:11px;font-weight:800;text-transform:uppercase;line-height:1.2">${post.name}</div>
+      <div style="color:${col};font-family:'Barlow Condensed';font-size:11px;font-weight:800;text-transform:uppercase;line-height:1.2${mobP?';white-space:normal;overflow-wrap:break-word':''}">${mobP?(post.name||'').replace(/\s+/g,'<br>'):post.name}</div>
       ${opk?'<div style="font-size:8px;color:var(--gold);font-family:\'Barlow Condensed\';font-weight:700">ALLE TEAMS</div>':''}
     </td>`;
     hours.forEach(hr=>{
@@ -1082,7 +1086,9 @@ function renderGridTeam(el){
   const lk={};hours.forEach(hr=>{lk[hr]={};Object.entries(dd[hr]||{}).forEach(([pid,arr])=>arr.forEach(tid=>{lk[hr][tid]=pid;}));});
   let teams=[...D.teams].filter(t=>getAv(t,activeDay));const c=shiftCountsForDay(activeDay);
   if(statSort==='count')teams.sort((a,b)=>(c[b.id]||0)-(c[a.id]||0));else teams.sort((a,b)=>D.teams.indexOf(a)-D.teams.indexOf(b));
-  setHourColWidth(longestPostWordPx());
+  const mobT=isMobileView();
+  applyCol1Width();
+  setHourColWidth(mobT?longestPostWordPx()+16:longestPostWordPx());
   let h=`<div class="sched-wrap"><table class="sched-grid">${buildGridHeader(hours,activeDay,'TEAM')}<tbody>`;
   teams.forEach(team=>{
     const col=tc(team.id);
@@ -1282,8 +1288,7 @@ table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:2
 @page{size:A3 landscape;margin:4mm;}@media print{.day-page{padding:3mm;}}</style>`;
   const pa=document.getElementById('print-area');
   pa.innerHTML=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Grensrock 2026</title>${css}</head><body>`+buildPage('friday','post')+buildPage('friday','team')+buildPage('saturday','post')+buildPage('saturday','team')+'</body></html>';
-  pa.style.display='block';
-  requestAnimationFrame(()=>{window.print();const cleanup=()=>{pa.innerHTML='';pa.style.display='none';};window.addEventListener('afterprint',cleanup,{once:true});setTimeout(cleanup,30000);});
+  requestAnimationFrame(()=>{window.print();const cleanup=()=>{pa.innerHTML='';};window.addEventListener('afterprint',cleanup,{once:true});setTimeout(cleanup,30000);});
   toast('🖨 PDF afdrukvenster geopend (4 pagina\'s)','info');
 }
 
