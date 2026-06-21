@@ -576,7 +576,7 @@ let col1Width=parseInt((function(){try{return localStorage.getItem('gr_col1');}c
 function applyCol1Width(){document.documentElement.style.setProperty('--col1-width',col1Width+'px');}
 function setHourColWidth(px){document.documentElement.style.setProperty('--hcol',Math.round(px)+'px');}
 function measureTextPx(text,font){var c=measureTextPx._c||(measureTextPx._c=document.createElement('canvas'));var ctx=c.getContext('2d');ctx.font=font;return ctx.measureText(text||'').width;}
-function longestMemberPx(){var max=0;D.teams.forEach(function(t){(t.members||'').split(',').forEach(function(m){var w=measureTextPx(m.trim(),'400 10px Barlow, Arial, sans-serif');if(w>max)max=w;});});/* +1px per teken extra marge voor renderverschillen + cel/chip-padding */var pad=38;return Math.min(260,Math.max(96,Math.ceil(max*1.06)+pad));}
+function longestMemberPx(){var max=0;D.teams.forEach(function(t){(t.members||'').split(',').forEach(function(m){var w=measureTextPx(m.trim(),'400 10px Barlow, Arial, sans-serif');if(w>max)max=w;});});/* ruime marge voor renderverschillen + cel/chip-padding */var pad=46;return Math.min(300,Math.max(100,Math.ceil(max*1.12)+pad));}
 function longestPostWordPx(){var max=0;D.posts.forEach(function(p){(p.name||'').split(' ').forEach(function(w){var px=measureTextPx(w,'700 9px "Barlow Condensed", Arial, sans-serif');if(px>max)max=px;});});var pad=30;return Math.min(220,Math.max(90,Math.ceil(max*1.08)+pad));}
 function startCol1Resize(e){e.preventDefault();e.stopPropagation();var sx=e.clientX,sw=col1Width;
   function mv(ev){col1Width=Math.max(80,Math.min(460,sw+(ev.clientX-sx)));applyCol1Width();}

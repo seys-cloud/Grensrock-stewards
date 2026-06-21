@@ -1,5 +1,5 @@
 /* Grensrock Stewards Planner - service worker */
-const CACHE = 'gr-stewards-v1';
+const CACHE = 'gr-stewards-v2';
 const ASSETS = ['./', './index.html', './logo.png', './favicon.png',
   './icon-192.png', './icon-512.png', './manifest.webmanifest'];
 
