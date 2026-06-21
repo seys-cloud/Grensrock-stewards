@@ -251,13 +251,9 @@ body.light .pg-light{display:inline-block;}
   </div>
   <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
     <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Dark/Light modus">🌙</button>
-    <button class="btn btn-ghost btn-sm" id="btn-regen" style="display:none" onclick="doGenerate()">↺ Regenereer</button>
     <button class="btn btn-ghost btn-sm" id="btn-backup" onclick="exportState()" title="Backup: exporteer de volledige staat (teams, posten, timetable, rooster) als JSON">💾</button>
     <button class="btn btn-ghost btn-sm" id="btn-restore" onclick="document.getElementById('restore-input').click()" title="Herstel: importeer een eerder geëxporteerde backup (JSON)">⤴</button>
     <input type="file" id="restore-input" accept=".json,application/json" style="display:none" onchange="importState(this.files[0]); this.value='';">
-    <button class="btn btn-primary btn-sm" id="btn-publish" style="display:none" onclick="publishRooster()" title="Publiceer het rooster naar de teamweergave">📤 Publiceer</button>
-    <button class="btn btn-sec btn-sm" id="btn-xls" style="display:none" onclick="doExportXLS()">⬇ Excel</button>
-    <button class="btn btn-gold btn-sm" id="btn-pdf" style="display:none" onclick="doExportPDF()">🖨 PDF</button>
   </div>
 </header>
 
@@ -410,6 +406,12 @@ body.light .pg-light{display:inline-block;}
         <option value="post">Post</option>
       </select>
       <select class="filter-select" id="flt-val" style="display:none" onchange="onFilterVal()"></select>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto">
+      <button class="btn btn-ghost btn-sm" id="btn-regen" style="display:none" onclick="doGenerate()">↺ Regenereer</button>
+      <button class="btn btn-primary btn-sm" id="btn-publish" style="display:none" onclick="publishRooster()" title="Publiceer het rooster naar de teamweergave">📤 Publiceer</button>
+      <button class="btn btn-sec btn-sm" id="btn-xls" style="display:none" onclick="doExportXLS()">⬇ Excel</button>
+      <button class="btn btn-gold btn-sm" id="btn-pdf" style="display:none" onclick="doExportPDF()">🖨 PDF</button>
     </div>
   </div>
   <div id="validation-panel" style="display:none;margin-bottom:11px"></div>
@@ -594,9 +596,15 @@ function applyTheme(){document.body.classList.toggle('light',!darkMode);var tb=d
 let col1Width=parseInt((function(){try{return localStorage.getItem('gr_col1');}catch(e){return null;}})()||'150')||150;
 function applyCol1Width(){document.documentElement.style.setProperty('--col1-width',col1Width+'px');}
 function setHourColWidth(px){document.documentElement.style.setProperty('--hcol',Math.round(px)+'px');}
-function measureTextPx(text,font){var c=measureTextPx._c||(measureTextPx._c=document.createElement('canvas'));var ctx=c.getContext('2d');ctx.font=font;return ctx.measureText(text||'').width;}
-function longestMemberPx(){var max=0;D.teams.forEach(function(t){(t.members||'').split(',').forEach(function(m){var w=measureTextPx(m.trim(),'400 10px Barlow, Arial, sans-serif');if(w>max)max=w;});});/* ruime marge voor renderverschillen + cel/chip-padding */var pad=46;return Math.min(300,Math.max(100,Math.ceil(max*1.12)+pad));}
-function longestPostWordPx(){var max=0;D.posts.forEach(function(p){(p.name||'').split(' ').forEach(function(w){var px=measureTextPx(w,'700 9px "Barlow Condensed", Arial, sans-serif');if(px>max)max=px;});});var pad=30;return Math.min(220,Math.max(90,Math.ceil(max*1.08)+pad));}
+/* echte DOM-meting met het werkelijk geladen lettertype (geen canvas-fallback) */
+function _measureMax(strings,cssText){
+  var m=document.getElementById('__hmeasure');
+  if(!m){m=document.createElement('span');m.id='__hmeasure';document.body.appendChild(m);}
+  m.style.cssText='position:absolute;left:-9999px;top:-9999px;white-space:nowrap;visibility:hidden;padding:0;margin:0;border:0;'+cssText;
+  var max=0;for(var i=0;i<strings.length;i++){m.textContent=strings[i];var w=m.offsetWidth;if(w>max)max=w;}return max;
+}
+function longestMemberPx(){var names=[];D.teams.forEach(function(t){(t.members||'').split(',').forEach(function(s){s=s.trim();if(s)names.push(s);});});var w=_measureMax(names,"font-family:'Barlow',Arial,sans-serif;font-size:10px;font-weight:400;");return Math.min(360,Math.max(110,Math.ceil(w)+42));}
+function longestPostWordPx(){var words=[];D.posts.forEach(function(p){(p.name||'').split(' ').forEach(function(s){s=s.trim();if(s)words.push(s);});});var w=_measureMax(words,"font-family:'Barlow Condensed',Arial,sans-serif;font-size:9px;font-weight:700;");return Math.min(280,Math.max(96,Math.ceil(w)+28));}
 function startCol1Resize(e){e.preventDefault();e.stopPropagation();var sx=e.clientX,sw=col1Width;
   function mv(ev){col1Width=Math.max(80,Math.min(460,sw+(ev.clientX-sx)));applyCol1Width();}
   function up(){document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);try{localStorage.setItem('gr_col1',col1Width);}catch(e){}}
