@@ -35,7 +35,7 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-track{background:var(--bg);}
 ::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:3px;}
-header{background:var(--hdr-bg);border-bottom:3px solid var(--red);padding:0 22px;height:62px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:300;box-shadow:0 2px 28px rgba(200,16,30,.14);}
+header{background:var(--hdr-bg);border-bottom:3px solid var(--red);padding:8px 22px;min-height:62px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;position:sticky;top:0;z-index:300;box-shadow:0 2px 28px rgba(200,16,30,.14);}
 .logo-wrap{display:flex;align-items:center;gap:11px;}
 .logo{font-family:'Anton',sans-serif;font-size:19px;letter-spacing:4px;color:#fff;}
 .logo span{color:var(--red);}
@@ -162,6 +162,14 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
 .toast.ok{border-color:var(--green);color:var(--green);}
 .toast.err{border-color:var(--red);color:#ff7070;}
 .toast.info{border-color:var(--gold);color:var(--gold);}
+.pg-wrap{overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:8px;background:var(--card);padding:8px;max-height:calc(100vh - 210px);text-align:center;}
+.pg-map{max-width:100%;height:auto;display:none;cursor:zoom-in;border-radius:4px;}
+.pg-map.zoomed{max-width:none;width:1100px;cursor:zoom-out;}
+.pg-dark{display:inline-block;}
+.pg-light{display:none;}
+body.light .pg-dark{display:none;}
+body.light .pg-light{display:inline-block;}
+.pg-hint{font-size:11px;color:var(--text-dim);font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.5px;margin-top:8px;text-align:center;}
 #print-area{display:none;}
 @media print{body>*:not(#print-area){display:none!important;}#print-area{display:block!important;}#print-area .day-page{page-break-after:always;}#print-area .day-page:last-child{page-break-after:auto;}}
 @media(max-width:768px){.fmt-grid,.two-day{grid-template-columns:1fr;}.nav-tab{padding:5px 8px;font-size:10px;}main{padding:10px 6px;}.sched-wrap{max-height:none;}}
@@ -239,8 +247,9 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
     <button class="nav-tab active" onclick="goTab('upload')">Upload</button>
     <button class="nav-tab" onclick="goTab('invoer')">Invoer</button>
     <button class="nav-tab" onclick="goTab('rooster')">Rooster</button>
+    <button class="nav-tab" onclick="goTab('plattegrond')">Plattegrond</button>
   </div>
-  <div style="display:flex;gap:6px;align-items:center;">
+  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
     <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Dark/Light modus">🌙</button>
     <button class="btn btn-ghost btn-sm" id="btn-regen" style="display:none" onclick="doGenerate()">↺ Regenereer</button>
     <button class="btn btn-ghost btn-sm" id="btn-backup" onclick="exportState()" title="Backup: exporteer de volledige staat (teams, posten, timetable, rooster) als JSON">💾</button>
@@ -417,6 +426,16 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
   </div>
   <div id="sched-view"></div>
 </section>
+<section id="sec-plattegrond" class="section">
+  <div class="sec-eyebrow">Festivalterrein</div>
+  <h1 class="sec-title" style="font-size:22px">Plattegrond &amp; posten</h1>
+  <div class="red-line"></div>
+  <div class="pg-wrap">
+    <img class="pg-map pg-light" src="plattegrond-light.png" alt="Plattegrond met posten" loading="lazy" onclick="this.classList.toggle('zoomed')">
+    <img class="pg-map pg-dark" src="plattegrond-dark.png" alt="Plattegrond met posten" loading="lazy" onclick="this.classList.toggle('zoomed')">
+  </div>
+  <p class="pg-hint">Tik op de kaart om in/uit te zoomen</p>
+</section>
 </main>
 <div class="toast" id="toast"></div>
 
@@ -496,7 +515,7 @@ let appMode='view', loggedIn=false;
 function refreshEdit(){ editMode = (loggedIn && appMode==='edit') && !!sb; setEditUI(); }
 function setEditUI(){
   var ab=document.getElementById('auth-btn');
-  if(ab){ ab.textContent = editMode ? ('🔓 '+userEmail+' · uitloggen') : '🔒 Aanmelden'; ab.onclick = editMode ? logout : chooseEdit; }
+  if(ab){ ab.textContent = editMode ? '🔓 Uitloggen' : '🔒 Aanmelden'; ab.title = editMode ? ('Ingelogd als '+userEmail) : 'Aanmelden om te bewerken'; ab.onclick = editMode ? logout : chooseEdit; }
 }
 function buildAuthControls(){
   var grp=document.querySelector('header > div:last-child'); if(!grp) return;
@@ -506,7 +525,7 @@ function buildAuthControls(){
   wrap.innerHTML='<span id="sync-badge" style="color:var(--text-dim);font-weight:600;font-size:11px"></span><button id="auth-btn" class="theme-btn" type="button" style="white-space:nowrap"></button>';
   grp.insertBefore(wrap, grp.firstChild);
 }
-function applyModeUI(){ var view=(appMode==='view'); var tabs=document.querySelectorAll('.nav-tab'); if(tabs[0]) tabs[0].style.display=view?'none':''; if(tabs[1]) tabs[1].style.display=view?'none':''; var rg=document.getElementById('btn-regen'); if(rg&&view) rg.style.display='none'; var pb=document.getElementById('btn-publish'); if(pb&&view) pb.style.display='none'; ['btn-xls','btn-pdf'].forEach(function(id){ var el=document.getElementById(id); if(el&&view) el.style.display='none'; }); var vp=document.getElementById('validation-panel'); if(vp&&view) vp.style.display='none'; var sc=document.getElementById('stats-card'); if(sc) sc.style.display=view?'none':''; ['btn-backup','btn-restore'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display=view?'none':'';}); var aw=document.getElementById('auth-wrap'); if(aw)aw.style.display=view?'none':''; if(view) goTab('rooster'); }
+function applyModeUI(){ var view=(appMode==='view'); var tabs=document.querySelectorAll('.nav-tab'); if(tabs[0]) tabs[0].style.display=view?'none':''; if(tabs[1]) tabs[1].style.display=view?'none':''; var rg=document.getElementById('btn-regen'); if(rg&&view) rg.style.display='none'; var pb=document.getElementById('btn-publish'); if(pb&&view) pb.style.display='none'; ['btn-xls','btn-pdf'].forEach(function(id){ var el=document.getElementById(id); if(el&&view) el.style.display='none'; }); var vp=document.getElementById('validation-panel'); if(vp&&view) vp.style.display='none'; var sc=document.getElementById('stats-card'); if(sc) sc.style.display=view?'none':''; ['btn-backup','btn-restore'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display=view?'none':'';}); var aw=document.getElementById('auth-wrap'); if(aw)aw.style.display=view?'none':''; if(view){var _act=document.querySelector('.section.active');var _id=_act?_act.id:'';if(!_act||_id==='sec-upload'||_id==='sec-invoer')goTab('rooster');} }
 function showApp(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(l)l.style.display='none'; if(g)g.style.display='none'; applyModeUI(); }
 function showLanding(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(g)g.style.display='none'; if(l)l.style.display='flex'; }
 function showLoginOverlay(){ var l=document.getElementById('ov-landing'),g=document.getElementById('ov-login'); if(l)l.style.display='none'; if(g)g.style.display='flex'; var em=document.getElementById('login-email'); if(em) setTimeout(function(){em.focus();},50); }

@@ -1,7 +1,8 @@
 /* Grensrock Stewards Planner - service worker */
-const CACHE = 'gr-stewards-v2';
+const CACHE = 'gr-stewards-v4';
 const ASSETS = ['./', './index.html', './logo.png', './favicon.png',
-  './icon-192.png', './icon-512.png', './manifest.webmanifest'];
+  './icon-192.png', './icon-512.png', './manifest.webmanifest',
+  './plattegrond-light.png', './plattegrond-dark.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
