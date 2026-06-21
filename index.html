@@ -92,7 +92,12 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
 .sched-wrap{overflow:auto;border-radius:8px;border:1px solid var(--border);max-height:calc(100vh - 330px);}
 .sched-grid{border-collapse:collapse;table-layout:fixed;width:100%;min-width:860px;}
 .sched-grid thead tr th{background:var(--surface);padding:8px 9px;text-align:center;font-size:9px;font-family:'Barlow Condensed',sans-serif;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text-dim);border-bottom:2px solid var(--border);border-right:1px solid var(--border);position:sticky;top:0;z-index:4;white-space:nowrap;}
-.sched-grid thead tr th.row-h{position:sticky;top:0;left:0;z-index:5;text-align:left;border-right:2px solid var(--border-hi);}
+.sched-grid thead tr th.row-h{position:sticky;top:0;left:0;z-index:5;text-align:left;border-right:2px solid var(--border-hi);position:sticky;}
+.sched-grid th.row-h,.sched-grid td.row-h{width:var(--col1-width,150px);min-width:var(--col1-width,150px);max-width:var(--col1-width,150px);}
+.sched-grid thead tr th.row-h{position:relative;}
+.col1-resizer{position:absolute;top:0;right:-3px;width:8px;height:100%;cursor:col-resize;user-select:none;z-index:8;}
+.col1-resizer:hover{background:var(--gold);opacity:.5;}
+.sched-grid .row-members{font-size:13px;font-weight:600;line-height:1.3;color:var(--text);font-family:'Barlow',sans-serif;text-transform:none;}
 .sched-grid thead tr th.hour-col.midnight{color:var(--gold)!important;border-top:2px solid var(--gold);}
 .sched-grid thead tr th.hour-col{padding:8px 4px;}
 .sched-grid tbody tr td.row-h{position:sticky;left:0;z-index:2;background:var(--surface);border-right:2px solid var(--border-hi);padding:5px 8px;vertical-align:middle;}
@@ -339,8 +344,8 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
   <div class="card">
     <div class="card-header"><span class="card-title">Teams</span><span class="badge" id="cnt-teams">0</span></div>
     <div style="overflow-x:auto">
-      <table class="data-table" style="table-layout:fixed;width:100%"><colgroup><col style="width:34px"><col style="width:104px"><col><col style="width:96px"><col style="width:96px"><col style="width:92px"><col style="width:92px"><col style="width:210px"><col style="width:150px"><col style="width:124px"><col style="width:58px"><col style="width:72px"></colgroup>
-        <thead><tr><th>#</th><th>Team</th><th>Leden</th><th>Vrijdag</th><th>Zaterdag</th><th style="color:var(--gold)">Bands vrij</th><th style="color:var(--gold)">Bands zat</th><th>Post Vkr.</th><th>Collega Vkr.</th><th>Post uitsl.</th><th>-18j</th><th></th></tr></thead>
+      <table class="data-table" style="table-layout:fixed;width:100%"><colgroup><col style="width:48px"><col><col style="width:96px"><col style="width:96px"><col style="width:92px"><col style="width:92px"><col style="width:210px"><col style="width:150px"><col style="width:124px"><col style="width:58px"><col style="width:88px"></colgroup>
+        <thead><tr><th>#</th><th>Leden</th><th>Vrijdag</th><th>Zaterdag</th><th style="color:var(--gold)">Bands vrij</th><th style="color:var(--gold)">Bands zat</th><th>Post Vkr.</th><th>Collega Vkr.</th><th>Post uitsl.</th><th>-18j</th><th></th></tr></thead>
         <tbody id="tbody-teams"></tbody>
       </table>
     </div>
@@ -349,7 +354,7 @@ main{padding:22px;max-width:1800px;margin:0 auto;}
     <div class="card-header"><span class="card-title">Posten</span><span class="badge" id="cnt-posts">0</span></div>
     <div style="overflow-x:auto">
       <table class="data-table">
-        <thead><tr><th>#</th><th>Post</th><th>Vrijdag</th><th>Zaterdag</th><th style="color:var(--gold)">Teams/Uur Vrijdag</th><th style="color:var(--gold)">Teams/Uur Zaterdag</th><th>+18j</th><th></th></tr></thead>
+        <thead><tr><th>#</th><th>Post</th><th>Vrijdag</th><th>Zaterdag</th><th style="color:var(--gold)">Teams/Uur Vrijdag</th><th style="color:var(--gold)">Teams/Uur Zaterdag</th><th>Leeftijd</th><th></th></tr></thead>
         <tbody id="tbody-posts"></tbody>
       </table>
     </div>
@@ -435,7 +440,7 @@ function applyState(data){ if(!data) return false; let ch=false;
   if(Array.isArray(data.teams)){ D.teams=data.teams; ch=true; }
   if(Array.isArray(data.posts)){ D.posts=data.posts; ch=true; }
   if(data.timetable){ D.timetable=data.timetable; ch=true; }
-  if(data.schedule){ S=data.schedule; } return ch; }
+  if(data.schedule){ S=data.schedule; } migrateColleaguePrefs(); return ch; }
 /* ===== Veiligheidsnet: volledige staat exporteren/importeren als JSON ===== */
 function exportState(){
   try{
@@ -558,7 +563,16 @@ const avStr=a=>{
   return`${fv}&ndash;${tv}`;
 };
 
-function toggleTheme(){darkMode=!darkMode;document.body.classList.toggle('light',!darkMode);document.getElementById('theme-btn').textContent=darkMode?'🌙':'☀️';}
+function toggleTheme(){darkMode=!darkMode;applyTheme();try{localStorage.setItem('gr_theme',darkMode?'dark':'light');}catch(e){}}
+function applyTheme(){document.body.classList.toggle('light',!darkMode);var tb=document.getElementById('theme-btn');if(tb)tb.textContent=darkMode?'🌙':'☀️';
+  /* her-render zodat ingebakken kleuren (timetable-bg) meeschakelen — lost wit/zwart-bug op */
+  try{renderInputTables();renderTimetableInvoer();if(S){renderStats();renderSchedView();renderValidation();}}catch(e){}}
+let col1Width=parseInt((function(){try{return localStorage.getItem('gr_col1');}catch(e){return null;}})()||'150')||150;
+function applyCol1Width(){document.documentElement.style.setProperty('--col1-width',col1Width+'px');}
+function startCol1Resize(e){e.preventDefault();e.stopPropagation();var sx=e.clientX,sw=col1Width;
+  function mv(ev){col1Width=Math.max(80,Math.min(460,sw+(ev.clientX-sx)));applyCol1Width();}
+  function up(){document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);try{localStorage.setItem('gr_col1',col1Width);}catch(e){}}
+  document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);}
 
 function goTab(t){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
@@ -635,6 +649,17 @@ function parseNeedStr(str,av){const out={};if(!av)return out;if(!str||!String(st
 function getNeed(post,day,hr){const n=post.needPerHour?.[day]?.[hr];return n!==undefined?n:1;}
 function needSummary(nph){if(!nph||!Object.keys(nph).length)return'<span style="color:var(--text-muted)">—</span>';const hrs=Object.keys(nph).map(Number).sort((a,b)=>a-b);const segs=[];let cur=nph[hrs[0]],st=hrs[0];for(let i=1;i<hrs.length;i++){if(nph[hrs[i]]!==cur){segs.push({from:st,to:hrs[i-1],n:cur});cur=nph[hrs[i]];st=hrs[i];}}segs.push({from:st,to:hrs[hrs.length-1],n:cur});return segs.map(s=>`<span style="color:${s.n===2?'var(--gold)':'var(--text-dim)'}">${fh(s.from)}-${fh(s.to+1)}:<b>${s.n}×</b></span>`).join(' ');}
 function needStrFromObj(nph){if(!nph||!Object.keys(nph).length)return'';const hrs=Object.keys(nph).map(Number).sort((a,b)=>a-b);const segs=[];let cur=nph[hrs[0]],st=hrs[0];for(let i=1;i<hrs.length;i++){if(nph[hrs[i]]!==cur){segs.push(`${st}:${cur}`);cur=nph[hrs[i]];st=hrs[i];}}segs.push(`${st}:${cur}`);return segs.join(',');}
+/* ===== Leeftijdsbeperking per uur (18:nee, 21:ja) ===== */
+function parseAgeStr(str,av){const out={};if(!av)return out;const ch={};if(str&&String(str).trim()){String(str).split(',').forEach(p=>{const m=p.trim().match(/^(\d+)\s*:\s*(ja|nee|j|n|true|false|1|0)$/i);if(m){const v=/^(ja|j|true|1)$/i.test(m[2]);ch[parseInt(m[1])]=v;}});}const keys=Object.keys(ch).map(Number).sort((a,b)=>a-b);let cur=false;for(let h=av.from;h<av.to;h++){for(const k of keys){if(k<=h)cur=ch[k];}out[h]=cur;}return out;}
+function ageStrFromObj(obj){if(!obj||!Object.keys(obj).length)return'';const hrs=Object.keys(obj).map(Number).sort((a,b)=>a-b);const segs=[];let cur=obj[hrs[0]],st=hrs[0];for(let i=1;i<hrs.length;i++){if(obj[hrs[i]]!==cur){segs.push(`${st}:${cur?'ja':'nee'}`);cur=obj[hrs[i]];st=hrs[i];}}segs.push(`${st}:${cur?'ja':'nee'}`);return segs.join(',');}
+function ageRestricted(post,day,hr){const aph=post.adultsPerHour&&post.adultsPerHour[day];if(aph&&Object.keys(aph).length)return !!aph[hr];return !!post.adults18;}
+function ageSummaryShort(post){const parts=[];['friday','saturday'].forEach(day=>{const aph=post.adultsPerHour&&post.adultsPerHour[day];let lbl='';if(aph&&Object.keys(aph).length){const hrs=Object.keys(aph).map(Number).sort((a,b)=>a-b).filter(h=>aph[h]);if(hrs.length)lbl='+18 v.a. '+fh(hrs[0]);}else if(post.adults18){lbl='+18 ganse dag';}if(lbl)parts.push((day==='friday'?'Vr ':'Za ')+lbl);});return parts.length?'<span style="color:var(--gold);font-weight:700">'+parts.join(' · ')+'</span>':'<span style="color:var(--text-muted)">—</span>';}
+/* Teamlabel = nummer uit eerste kolom (geen team-namen meer) */
+function teamRef(team){if(!team)return'?';const i=D.teams.indexOf(team);return '#'+(i>=0?i+1:'?');}
+function teamRefById(id){const i=D.teams.findIndex(t=>t.id===id);return '#'+(i>=0?i+1:'?');}
+function memberLines(members){return (members||'').split(',').map(m=>m.trim()).filter(Boolean).map(m=>'<span style="display:block">'+m+'</span>').join('')||'—';}
+/* Migratie: collega-voorkeuren op naam -> stabiele team-id */
+function migrateColleaguePrefs(){if(!Array.isArray(D.teams))return;const byName={};D.teams.forEach(t=>{if(t.name)byName[String(t.name).toLowerCase()]=t.id;});const ids=new Set(D.teams.map(t=>t.id));D.teams.forEach(t=>{if(!Array.isArray(t.prefColleagues))return;t.prefColleagues=t.prefColleagues.map(v=>{if(ids.has(v))return v;const byn=byName[String(v).toLowerCase()];return byn||null;}).filter(Boolean);});}
 
 function actsForHour(hr,day){return(D.timetable[day]||[]).filter(a=>{const f=a.fromH+a.fromMin/60,t=a.toH+a.toMin/60;return f<hr+1&&t>hr;});}
 
@@ -715,39 +740,38 @@ function loadDemo(){if(!requireEdit())return;
   onDataReady();scheduleCloudSave();toast('🎸 Demo data geladen (25 teams, 13 posten, timetable)','ok');
 }
 
-function onDataReady(){renderInputTables();renderTimetableInvoer();goTab('invoer');}
+function onDataReady(){migrateColleaguePrefs();renderInputTables();renderTimetableInvoer();goTab('invoer');}
 function renderInputTables(){
   document.getElementById('cnt-teams').textContent=D.teams.length+' teams';
   document.getElementById('cnt-posts').textContent=D.posts.length+' posten';
   document.getElementById('tbody-teams').innerHTML=D.teams.map((t,i)=>`<tr>
-    <td style="color:var(--text-muted)">${i+1}</td>
-    <td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${TPAL[i%TPAL.length]};flex-shrink:0"></span><strong>${t.name}</strong></span></td>
-    <td style="color:var(--text-dim);max-width:155px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.members}">${t.members||'—'}</td>
+    <td style="color:var(--text);font-weight:700"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:${TPAL[i%TPAL.length]};flex-shrink:0"></span>${i+1}</span></td>
+    <td style="color:var(--text-dim);max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${t.members}">${t.members||'—'}</td>
     <td style="font-size:10px">${avStr(t.availability.friday)}</td>
     <td style="font-size:10px">${avStr(t.availability.saturday)}</td>
     <td style="color:var(--gold);font-size:10px">${(t.breakPref.friday||[]).map(h=>fh(h)).join(', ')||'—'}</td>
     <td style="color:var(--gold);font-size:10px">${(t.breakPref.saturday||[]).map(h=>fh(h)).join(', ')||'—'}</td>
     <td style="color:var(--text-dim);font-size:10px">${t.prefPosts.join(', ')||'—'}</td>
-    <td style="color:var(--text-dim);font-size:10px">${t.prefColleagues.join(', ')||'—'}</td>
+    <td style="color:var(--text-dim);font-size:10px">${(t.prefColleagues||[]).map(cid=>{const j=D.teams.findIndex(x=>x.id===cid);return j>=0?'#'+(j+1):'';}).filter(Boolean).join(', ')||'—'}</td>
     <td style="color:var(--text-dim);font-size:10px">${t.exclusivePost||'—'}</td>
     <td style="text-align:center;font-size:11px">${t.under18?'<span style="color:var(--red);font-weight:800">−18</span>':'—'}</td>
-    <td><button class="btn btn-xs btn-ghost" onclick="openEditTeamModal('${t.id}')">✎</button>
+    <td style="white-space:nowrap"><button class="btn btn-xs btn-ghost" onclick="openEditTeamModal('${t.id}')">✎</button>
         <button class="btn btn-xs btn-danger" onclick="deleteTeam('${t.id}')">✕</button></td></tr>`).join('');
   document.getElementById('tbody-posts').innerHTML=D.posts.map((p,i)=>`<tr>
-    <td style="color:var(--text-muted)">${i+1}</td>
+    <td style="color:var(--text);font-weight:700">${i+1}</td>
     <td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${PPAL[i%PPAL.length]};flex-shrink:0"></span><strong>${p.name}</strong>${isOpkuis(p)?'<span style="background:var(--gold);color:#080808;border-radius:3px;padding:1px 5px;font-size:9px;font-family:\'Barlow Condensed\';font-weight:700;margin-left:4px">OPKUIS</span>':''}</span></td>
     <td style="font-size:10px">${avStr(p.schedule.friday?p.schedule.friday:null)}</td>
     <td style="font-size:10px">${avStr(p.schedule.saturday?p.schedule.saturday:null)}</td>
     <td style="font-size:10px">${needSummary(p.needPerHour.friday)}</td>
     <td style="font-size:10px">${needSummary(p.needPerHour.saturday)}</td>
-    <td style="text-align:center;font-size:11px">${p.adults18?'<span style="color:var(--gold);font-weight:800">18+</span>':'—'}</td>
-    <td><button class="btn btn-xs btn-ghost" onclick="openEditPostModal('${p.id}')">✎</button>
+    <td style="font-size:10px">${ageSummaryShort(p)}</td>
+    <td style="white-space:nowrap"><button class="btn btn-xs btn-ghost" onclick="openEditPostModal('${p.id}')">✎</button>
         <button class="btn btn-xs btn-danger" onclick="deletePost('${p.id}')">✕</button></td></tr>`).join('');
 }
 
 function closeModal(){document.getElementById('modal-backdrop').classList.remove('open');}
 function _openModal(title,body){document.getElementById('modal-title').textContent=title;document.getElementById('modal-body').innerHTML=body;document.getElementById('modal-backdrop').classList.add('open');}
-function openEditTeamModal(id){const t=D.teams.find(x=>x.id===id);if(!t)return;modalMode='editTeam';modalId=id;_openModal('Team: '+t.name,teamForm(t));}
+function openEditTeamModal(id){const t=D.teams.find(x=>x.id===id);if(!t)return;modalMode='editTeam';modalId=id;_openModal('Team '+teamRefById(id),teamForm(t));}
 function openNewTeamModal(){modalMode='newTeam';modalId=null;_openModal('Nieuw Team',teamForm({name:'',members:'',availability:{friday:{from:'begin',to:'einde'},saturday:{from:'begin',to:'einde'}},prefPosts:[],prefColleagues:[],breakPref:{friday:[],saturday:[]},exclusivePost:'',under18:false}));}
 function openEditPostModal(id){const p=D.posts.find(x=>x.id===id);if(!p)return;modalMode='editPost';modalId=id;_openModal('Post: '+p.name,postForm(p));}
 function openNewPostModal(){modalMode='newPost';modalId=null;_openModal('Nieuwe Post',postForm({name:'',schedule:{friday:null,saturday:null},needPerHour:{friday:{},saturday:{}}}));}
@@ -779,21 +803,25 @@ function _avFieldTot(prefix,val){
   </div>`;
 }
 function toggleAvField(prefix){const mode=document.getElementById(prefix+'-mode').value;document.getElementById(prefix+'-num').style.display=mode==='num'?'':'none';}
+function toggleDayActive(d){const cb=document.getElementById('f-'+d+'act');const box=document.getElementById('f-'+d+'-fields');if(!cb||!box)return;const on=cb.checked;box.style.opacity=on?'':'.4';box.style.pointerEvents=on?'':'none';}
 function getAvFieldVal(prefix){const mode=document.getElementById(prefix+'-mode').value;if(mode==='begin')return'begin';if(mode==='einde')return'einde';return document.getElementById(prefix+'-num').value||'';}
 
 function teamForm(t){
   const fFrom=t.availability?.friday?.from??'begin';const fTo=t.availability?.friday?.to??'einde';
   const sFrom=t.availability?.saturday?.from??'begin';const sTo=t.availability?.saturday?.to??'einde';
+  const friAct=!(t.availability&&t.availability.friday===null);
+  const satAct=!(t.availability&&t.availability.saturday===null);
   const _ssel='style="width:100%;padding:9px;border-radius:6px;background:var(--card-hi);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px"';
   const _ppostOpts=D.posts.map(p=>`<option ${(t.prefPosts||[]).some(x=>x.toLowerCase()===p.name.toLowerCase())?'selected':''}>${p.name}</option>`).join('');
-  const _pcolOpts=D.teams.filter(x=>x.name&&x.id!==t.id).map(x=>`<option ${(t.prefColleagues||[]).some(y=>y.toLowerCase()===x.name.toLowerCase())?'selected':''}>${x.name}</option>`).join('');
+  const _pcolOpts=D.teams.map((x,xi)=>x.id===t.id?'':`<option value="${x.id}" ${(t.prefColleagues||[]).includes(x.id)?'selected':''}>#${xi+1} — ${(x.members||'').split(',').map(m=>m.trim()).filter(Boolean).join(' / ')||'team'}</option>`).join('');
   const _exclOpts='<option value="">(geen — vrij)</option>'+D.posts.map(p=>`<option ${t.exclusivePost&&t.exclusivePost.toLowerCase()===p.name.toLowerCase()?'selected':''}>${p.name}</option>`).join('');
-  return`<div class="form-row full"><div class="form-group"><label>Teamnaam</label><input id="f-name" value="${t.name||''}"></div></div>
+  const _actLbl='style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text);text-transform:none;letter-spacing:0;font-weight:500"';
+  return`<div class="form-row full"><div class="form-group"><label>Teamnaam (intern, optioneel)</label><input id="f-name" value="${t.name||''}"></div></div>
   <div class="form-row full"><div class="form-group"><label>Leden (Voornaam Naam, komma-gescheiden)</label><input id="f-members" value="${t.members||''}"></div></div>
-  <div style="margin-bottom:9px"><p style="font-size:9px;font-family:'Barlow Condensed';font-weight:800;letter-spacing:1px;color:var(--red);text-transform:uppercase;margin-bottom:7px">Vrijdag</p>
-  <div class="form-row">${_avFieldVan('f-fv',fFrom)}${_avFieldTot('f-ft',fTo)}</div></div>
-  <div style="margin-bottom:9px"><p style="font-size:9px;font-family:'Barlow Condensed';font-weight:800;letter-spacing:1px;color:var(--red);text-transform:uppercase;margin-bottom:7px">Zaterdag</p>
-  <div class="form-row">${_avFieldVan('f-sv',sFrom)}${_avFieldTot('f-st',sTo)}</div></div>
+  <div style="margin-bottom:9px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><p style="font-size:9px;font-family:'Barlow Condensed';font-weight:800;letter-spacing:1px;color:var(--red);text-transform:uppercase;margin:0">Vrijdag</p><label ${_actLbl}><input type="checkbox" id="f-fact" ${friAct?'checked':''} onchange="toggleDayActive('f')" style="width:auto"> Actief deze dag</label></div>
+  <div class="form-row" id="f-f-fields" style="${friAct?'':'opacity:.4;pointer-events:none'}">${_avFieldVan('f-fv',fFrom)}${_avFieldTot('f-ft',fTo)}</div></div>
+  <div style="margin-bottom:9px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><p style="font-size:9px;font-family:'Barlow Condensed';font-weight:800;letter-spacing:1px;color:var(--red);text-transform:uppercase;margin:0">Zaterdag</p><label ${_actLbl}><input type="checkbox" id="f-sact" ${satAct?'checked':''} onchange="toggleDayActive('s')" style="width:auto"> Actief deze dag</label></div>
+  <div class="form-row" id="f-s-fields" style="${satAct?'':'opacity:.4;pointer-events:none'}">${_avFieldVan('f-sv',sFrom)}${_avFieldTot('f-st',sTo)}</div></div>
   <div class="form-row full"><div class="form-group"><label>Post voorkeur(en)</label><select id="f-ppost" multiple size="4" ${_ssel}>${_ppostOpts}</select><span class="form-hint">meerdere mogelijk: Ctrl/Cmd-klik</span></div></div>
   <div class="form-row full"><div class="form-group"><label>Collega voorkeur(en)</label><select id="f-pcol" multiple size="4" ${_ssel}>${_pcolOpts}</select><span class="form-hint">meerdere mogelijk: Ctrl/Cmd-klik</span></div></div>
   <div class="form-row">
@@ -806,6 +834,8 @@ function teamForm(t){
   </div>`;
 }
 function postForm(p){
+  const _ageFr=(p.adultsPerHour&&p.adultsPerHour.friday)?ageStrFromObj(p.adultsPerHour.friday):((p.adults18&&p.schedule&&p.schedule.friday)?p.schedule.friday.from+':ja':'');
+  const _ageSa=(p.adultsPerHour&&p.adultsPerHour.saturday)?ageStrFromObj(p.adultsPerHour.saturday):((p.adults18&&p.schedule&&p.schedule.saturday)?p.schedule.saturday.from+':ja':'');
   return`<div class="form-row full"><div class="form-group"><label>Postnaam</label><input id="f-name" value="${p.name||''}"></div></div>
   <div class="form-row">
     <div class="form-group"><label>Vrijdag Van</label><input id="f-fv" type="number" min="0" max="30" value="${p.schedule?.friday?.from??''}"></div>
@@ -817,7 +847,8 @@ function postForm(p){
   </div>
   <div class="form-row full"><div class="form-group"><label>Teams/Uur Vrijdag</label><input id="f-nfr" value="${needStrFromObj(p.needPerHour?.friday)}"><span class="form-hint">bv. 18:1,22:2,25:1</span></div></div>
   <div class="form-row full"><div class="form-group"><label>Teams/Uur Zaterdag</label><input id="f-nsa" value="${needStrFromObj(p.needPerHour?.saturday)}"></div></div>
-  <div class="form-row full"><div class="form-group"><label>Leeftijdsbeperking</label><label style="display:flex;align-items:center;gap:7px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text);font-size:13px"><input id="f-a18" type="checkbox" ${p.adults18?'checked':''} style="width:auto"> Enkel +18j stewards op deze post</label></div></div>`;
+  <div class="form-row full"><div class="form-group"><label>Leeftijdsbeperking Vrijdag</label><input id="f-afr" value="${_ageFr}"><span class="form-hint">bv. 18:nee, 21:ja — −18j teams worden niet ingepland waar 'ja' staat</span></div></div>
+  <div class="form-row full"><div class="form-group"><label>Leeftijdsbeperking Zaterdag</label><input id="f-asa" value="${_ageSa}"></div></div>`;
 }
 function actForm(a){
   return`<div class="form-row full"><div class="form-group"><label>Artiestennaam</label><input id="f-name" value="${a.name||''}" placeholder="bv. TRIPLE A"></div></div>
@@ -836,15 +867,17 @@ function saveModal(){if(!requireEdit())return;
   if(modalMode==='editTeam'||modalMode==='newTeam'){
     const fFrom=getAvFieldVal('f-fv'),fTo=getAvFieldVal('f-ft');
     const sFrom=getAvFieldVal('f-sv'),sTo=getAvFieldVal('f-st');
-    const mkAv=(f,t)=>{if(!f&&!t)return null;return{from:f||'begin',to:t||'einde'};};
-    const obj={id:modalMode==='newTeam'?'T'+Date.now():modalId,name:g('f-name').trim()||'Team',members:g('f-members').trim(),availability:{friday:mkAv(fFrom,fTo),saturday:mkAv(sFrom,sTo)},prefPosts:getMulti('f-ppost'),prefColleagues:getMulti('f-pcol'),breakPref:{friday:parseBreaks(g('f-bfr')),saturday:parseBreaks(g('f-bsa'))},exclusivePost:g('f-excl').trim(),under18:document.getElementById('f-u18')?.checked||false};
+    const friAct=document.getElementById('f-fact')?document.getElementById('f-fact').checked:true;
+    const satAct=document.getElementById('f-sact')?document.getElementById('f-sact').checked:true;
+    const mkAv=(f,t)=>({from:f||'begin',to:t||'einde'});
+    const obj={id:modalMode==='newTeam'?'T'+Date.now():modalId,name:g('f-name').trim(),members:g('f-members').trim(),availability:{friday:friAct?mkAv(fFrom,fTo):null,saturday:satAct?mkAv(sFrom,sTo):null},prefPosts:getMulti('f-ppost'),prefColleagues:getMulti('f-pcol'),breakPref:{friday:parseBreaks(g('f-bfr')),saturday:parseBreaks(g('f-bsa'))},exclusivePost:g('f-excl').trim(),under18:document.getElementById('f-u18')?.checked||false};
     if(modalMode==='newTeam')D.teams.push(obj);else{const i=D.teams.findIndex(t=>t.id===modalId);if(i!==-1)D.teams[i]=obj;}
     renderInputTables();
   }else if(modalMode==='editPost'||modalMode==='newPost'){
     const fa=parseAvRaw(g('f-fv'),g('f-ft')),sa=parseAvRaw(g('f-sv'),g('f-st'));
     const fav=fa?{from:resolveHour(fa.from,'friday','from'),to:resolveHour(fa.to,'friday','to')}:null;
     const sav=sa?{from:resolveHour(sa.from,'saturday','from'),to:resolveHour(sa.to,'saturday','to')}:null;
-    const obj={id:modalMode==='newPost'?'P'+Date.now():modalId,name:g('f-name').trim()||'Post',schedule:{friday:fav,saturday:sav},needPerHour:{friday:parseNeedStr(g('f-nfr'),fav),saturday:parseNeedStr(g('f-nsa'),sav)},adults18:document.getElementById('f-a18')?.checked||false};
+    const obj={id:modalMode==='newPost'?'P'+Date.now():modalId,name:g('f-name').trim()||'Post',schedule:{friday:fav,saturday:sav},needPerHour:{friday:parseNeedStr(g('f-nfr'),fav),saturday:parseNeedStr(g('f-nsa'),sav)},adultsPerHour:{friday:parseAgeStr(g('f-afr'),fav),saturday:parseAgeStr(g('f-asa'),sav)}};
     if(modalMode==='newPost')D.posts.push(obj);else{const i=D.posts.findIndex(p=>p.id===modalId);if(i!==-1)D.posts[i]=obj;}
     renderInputTables();savePersistent();
   }else if(modalMode==='newAct'||modalMode==='editAct'){
@@ -870,7 +903,9 @@ function doGenerate(){
 }
 function buildSchedule(){
   const sched={friday:{},saturday:{}};const st={};
-  D.teams.forEach(t=>{st[t.id]={tot:0,dayShifts:{friday:0,saturday:0},postCounts:{},lastH:{friday:-99,saturday:-99},consec:{friday:0,saturday:0},consecFree:{friday:0,saturday:0}};});
+  D.teams.forEach(t=>{st[t.id]={tot:0,dayShifts:{friday:0,saturday:0},postCounts:{},lastH:{friday:-99,saturday:-99},consec:{friday:0,saturday:0},consecFree:{friday:0,saturday:0},exclBreaks:{friday:new Set(),saturday:new Set()}};});
+  /* Uitsluitend-teams: max 2 pauze-uren, gespreid (niet aaneensluitend) */
+  D.teams.forEach(t=>{if(!t.exclusivePost)return;const post=D.posts.find(p=>p.name.toLowerCase()===t.exclusivePost.toLowerCase());if(!post)return;['friday','saturday'].forEach(day=>{const av=getAv(t,day),ps=post.schedule[day];if(!av||!ps)return;const lo=Math.max(av.from,ps.from),hi=Math.min(av.to,ps.to);const work=[];for(let h=lo;h<hi;h++)work.push(h);const n=work.length;if(!n)return;const br=st[t.id].exclBreaks[day];const nB=n>=6?2:(n>=3?1:0);if(nB>=1)br.add(work[Math.floor(n/3)]);if(nB>=2){let i2=Math.floor(2*n/3);const first=work[Math.floor(n/3)];if(work[i2]-first<2)i2=Math.min(n-1,i2+1);br.add(work[i2]);}});});
   ['friday','saturday'].forEach(day=>{
     const hSet=new Set();D.posts.forEach(p=>{const ps=p.schedule[day];if(ps)for(let h=ps.from;h<ps.to;h++)hSet.add(h);});
     const hours=[...hSet].sort((a,b)=>a-b);
@@ -880,10 +915,10 @@ function buildSchedule(){
       sorted.forEach(post=>{
         const ps=post.schedule[day];if(!ps||hour<ps.from||hour>=ps.to){sched[day][hour][post.id]=[];return;}
         const need=getNeed(post,day,hour);
-        if(isOpkuis(post)){const all=D.teams.filter(t=>!usedH.has(t.id)&&isAvail(t,day,hour)&&!(t.under18&&post.adults18)&&!(t.exclusivePost&&t.exclusivePost.toLowerCase()!==post.name.toLowerCase())).map(t=>t.id);sched[day][hour][post.id]=all;all.forEach(tid=>{usedH.add(tid);st[tid].tot++;st[tid].dayShifts[day]++;st[tid].postCounts[post.id]=(st[tid].postCounts[post.id]||0)+1;});return;}
+        if(isOpkuis(post)){const all=D.teams.filter(t=>!usedH.has(t.id)&&isAvail(t,day,hour)&&!(t.under18&&ageRestricted(post,day,hour))).map(t=>t.id);sched[day][hour][post.id]=all;all.forEach(tid=>{usedH.add(tid);st[tid].tot++;st[tid].dayShifts[day]++;st[tid].postCounts[post.id]=(st[tid].postCounts[post.id]||0)+1;});return;}
         const cands=D.teams.filter(t=>!usedH.has(t.id)).map(t=>({t,sc:scoreT(t,post,hour,day,st)})).filter(x=>x.sc>-9000).sort((a,b)=>b.sc-a.sc);
         const assigned=[];
-        if(need>=2&&cands.length>=2){let found=false;for(let i=0;i<cands.length&&!found;i++){for(const cn of cands[i].t.prefColleagues){const bi=cands.findIndex((x,xi)=>xi!==i&&x.t.name.toLowerCase()===cn.toLowerCase());if(bi!==-1){assigned.push(cands[i].t.id,cands[bi].t.id);found=true;break;}}}if(!found)for(const c of cands){if(assigned.length>=need)break;if(!assigned.includes(c.t.id))assigned.push(c.t.id);}
+        if(need>=2&&cands.length>=2){let found=false;for(let i=0;i<cands.length&&!found;i++){const bi=cands.findIndex((x,xi)=>xi!==i&&(cands[i].t.prefColleagues||[]).indexOf(x.t.id)>=0);if(bi!==-1){assigned.push(cands[i].t.id,cands[bi].t.id);found=true;}}if(!found)for(const c of cands){if(assigned.length>=need)break;if(!assigned.includes(c.t.id))assigned.push(c.t.id);}
         }else for(const c of cands){if(assigned.length>=need)break;assigned.push(c.t.id);}
         sched[day][hour][post.id]=assigned;
         assigned.forEach(tid=>{usedH.add(tid);const s=st[tid];s.tot++;s.dayShifts[day]++;s.postCounts[post.id]=(s.postCounts[post.id]||0)+1;s.consec[day]=(s.lastH[day]===hour-1)?s.consec[day]+1:1;s.lastH[day]=hour;s.consecFree[day]=0;});
@@ -896,9 +931,14 @@ function buildSchedule(){
 function availHours(team,day){const av=getAv(team,day);return av?Math.max(0,av.to-av.from):0;}
 function scoreT(team,post,hour,day,st){
   if(!isAvail(team,day,hour))return -10000;
-  if(team.under18 && post.adults18)return -10000;                 /* -18j niet op +18j post */
+  if(team.under18 && ageRestricted(post,day,hour))return -10000;   /* -18j niet op leeftijdsbeperkte uren */
   if(team.exclusivePost && team.exclusivePost.toLowerCase()!==post.name.toLowerCase())return -10000; /* enkel op eigen post */
-  const s=st[team.id];let score=100;
+  const s=st[team.id];
+  if(team.exclusivePost && team.exclusivePost.toLowerCase()===post.name.toLowerCase()){
+    if(s.exclBreaks && s.exclBreaks[day] && s.exclBreaks[day].has(hour))return -9500; /* gespreide pauze, max 2u */
+    return 100000+(Math.random()-.5);                              /* prio-team op eigen post */
+  }
+  let score=100;
   if((team.breakPref[day]||[]).includes(hour))score-=250;         /* bands = zachte voorkeur, geen harde uitsluiting */
   const avH=availHours(team,day)||1;score-=(s.dayShifts[day]/avH)*130;  /* relatieve eerlijkheid: gelijk aandeel gewerkt/beschikbaar */
   const cnt=s.postCounts[post.id]||0;const isPref=team.prefPosts.some(pp=>pp.toLowerCase()===post.name.toLowerCase());
@@ -924,22 +964,22 @@ function renderValidation(){
 }
 function runValidation(){
   const crit=[],warn=[],ok=[],understaffed=[],doubleAssign=[];
-  ['friday','saturday'].forEach(day=>{Object.entries(S[day]||{}).forEach(([hrStr,hp])=>{const hr=parseInt(hrStr);const seen={};Object.entries(hp).forEach(([pid,arr])=>{arr.forEach(tid=>{if(seen[tid]){const p1=D.posts.find(p=>p.id===seen[tid]);const p2=D.posts.find(p=>p.id===pid);const t=D.teams.find(t=>t.id===tid);doubleAssign.push(`${day==='friday'?'Vrijdag':'Zaterdag'} ${fh(hr)}: ${t?.name} op zowel "${p1?.name}" als "${p2?.name}"`);}else seen[tid]=pid;});});});});
-  const avVio=[];['friday','saturday'].forEach(day=>{Object.entries(S[day]||{}).forEach(([hrStr,hp])=>{const hr=parseInt(hrStr);Object.entries(hp).forEach(([pid,arr])=>{arr.forEach(tid=>{const t=D.teams.find(x=>x.id===tid);if(!isAvail(t,day,hr)){const post=D.posts.find(p=>p.id===pid);avVio.push(`${day==='friday'?'Vr':'Za'} ${fh(hr)}: ${t?.name} op ${post?.name}`);}});});});});
+  ['friday','saturday'].forEach(day=>{Object.entries(S[day]||{}).forEach(([hrStr,hp])=>{const hr=parseInt(hrStr);const seen={};Object.entries(hp).forEach(([pid,arr])=>{arr.forEach(tid=>{if(seen[tid]){const p1=D.posts.find(p=>p.id===seen[tid]);const p2=D.posts.find(p=>p.id===pid);const t=D.teams.find(t=>t.id===tid);doubleAssign.push(`${day==='friday'?'Vrijdag':'Zaterdag'} ${fh(hr)}: ${teamRefById(tid)} op zowel "${p1?.name}" als "${p2?.name}"`);}else seen[tid]=pid;});});});});
+  const avVio=[];['friday','saturday'].forEach(day=>{Object.entries(S[day]||{}).forEach(([hrStr,hp])=>{const hr=parseInt(hrStr);Object.entries(hp).forEach(([pid,arr])=>{arr.forEach(tid=>{const t=D.teams.find(x=>x.id===tid);if(!isAvail(t,day,hr)){const post=D.posts.find(p=>p.id===pid);avVio.push(`${day==='friday'?'Vr':'Za'} ${fh(hr)}: ${teamRefById(tid)} op ${post?.name}`);}});});});});
   if(avVio.length===0)ok.push('✅ Alle shifts binnen beschikbaarheid');else crit.push({msg:`❌ ${avVio.length} shift(s) buiten beschikbaarheid`,details:avVio.slice(0,6).join(' · ')+(avVio.length>6?` ... (+${avVio.length-6})`:'')} );
   ['friday','saturday'].forEach(day=>{D.posts.forEach(post=>{const ps=post.schedule[day];if(!ps)return;for(let h=ps.from;h<ps.to;h++){const arr=(S[day][h]?.[post.id]||[]);const need=getNeed(post,day,h);if(arr.length<need&&!isOpkuis(post))understaffed.push(`${day==='friday'?'Vrijdag':'Zaterdag'} ${fh(h)} – ${post.name}: ${arr.length}/${need} team${need>1?'s':''} (${need-arr.length} te weinig)`);}});});
   if(understaffed.length===0)ok.push(`✅ Alle post-slots volledig bezet`);
-  let bOk=0;const bVio=[];['friday','saturday'].forEach(day=>{D.teams.forEach(team=>{(team.breakPref[day]||[]).forEach(hr=>{const working=Object.values(S[day]?.[hr]||{}).some(a=>a.includes(team.id));if(working)bVio.push(`${team.name} ${day==='friday'?'Vr':'Za'} ${fh(hr)}`);else bOk++;});});});
+  let bOk=0;const bVio=[];['friday','saturday'].forEach(day=>{D.teams.forEach(team=>{(team.breakPref[day]||[]).forEach(hr=>{const working=Object.values(S[day]?.[hr]||{}).some(a=>a.includes(team.id));if(working)bVio.push(`${teamRef(team)} ${day==='friday'?'Vr':'Za'} ${fh(hr)}`);else bOk++;});});});
   const bTot=bOk+bVio.length;if(bTot===0)ok.push('✅ Geen bands-voorkeuren');else if(bVio.length===0)ok.push(`✅ Alle ${bTot} bands-voorkeuren gerespecteerd`);else warn.push({msg:`⚠️ ${bVio.length}/${bTot} bands-voorkeur(en) niet gerespecteerd`,details:bVio.join(' · ')});
-  const ppMissed=[];D.teams.forEach(team=>{if(!team.prefPosts.length)return;const prefObjs=D.posts.filter(p=>team.prefPosts.some(pp=>pp.toLowerCase()===p.name.toLowerCase()));const hasAny=['friday','saturday'].some(day=>Object.values(S[day]||{}).some(hp=>prefObjs.some(p=>(hp[p.id]||[]).includes(team.id))));if(!hasAny)ppMissed.push(team.name+' ('+team.prefPosts.join(', ')+')');}); 
+  const ppMissed=[];D.teams.forEach(team=>{if(!team.prefPosts.length)return;const prefObjs=D.posts.filter(p=>team.prefPosts.some(pp=>pp.toLowerCase()===p.name.toLowerCase()));const hasAny=['friday','saturday'].some(day=>Object.values(S[day]||{}).some(hp=>prefObjs.some(p=>(hp[p.id]||[]).includes(team.id))));if(!hasAny)ppMissed.push(teamRef(team)+' ('+team.prefPosts.join(', ')+')');}); 
   const ppTot=D.teams.filter(t=>t.prefPosts.length).length;if(ppTot===0)ok.push('✅ Geen post-voorkeuren');else if(ppMissed.length===0)ok.push(`✅ Alle ${ppTot} teams op voorkeur-post`);else warn.push({msg:`⚠️ ${ppMissed.length}/${ppTot} teams niet op voorkeur-post`,details:ppMissed.join(' · ')});
-  const cpMissed=[];D.teams.forEach(team=>{if(!team.prefColleagues.length)return;const paired=['friday','saturday'].some(day=>Object.values(S[day]||{}).some(hp=>Object.values(hp).some(arr=>{if(arr.length<2||!arr.includes(team.id))return false;return team.prefColleagues.some(cn=>{const col=D.teams.find(t=>t.name.toLowerCase()===cn.toLowerCase());return col&&arr.includes(col.id);});})));if(!paired)cpMissed.push(team.name+' → '+team.prefColleagues.join(', '));});
+  const cpMissed=[];D.teams.forEach(team=>{if(!team.prefColleagues.length)return;const paired=['friday','saturday'].some(day=>Object.values(S[day]||{}).some(hp=>Object.values(hp).some(arr=>{if(arr.length<2||!arr.includes(team.id))return false;return team.prefColleagues.some(cid=>arr.includes(cid));})));if(!paired)cpMissed.push(teamRef(team)+' → '+team.prefColleagues.map(cid=>teamRefById(cid)).join(', '));});
   const cpTot=D.teams.filter(t=>t.prefColleagues.length).length;if(cpTot===0)ok.push('✅ Geen collega-voorkeuren');else if(cpMissed.length===0)ok.push(`✅ Alle ${cpTot} collega-paren samengebracht`);else warn.push({msg:`⚠️ ${cpMissed.length}/${cpTot} collega-paren niet samengebracht`,details:cpMissed.join(' · ')});
   const postRep={};D.teams.forEach(t=>{postRep[t.id]={};});['friday','saturday'].forEach(day=>{Object.values(S[day]||{}).forEach(hp=>{Object.entries(hp).forEach(([pid,arr])=>{arr.forEach(tid=>{if(postRep[tid])postRep[tid][pid]=(postRep[tid][pid]||0)+1;});});});});
-  const repProblems=[];let maxRep=0;D.teams.forEach(team=>{Object.entries(postRep[team.id]||{}).forEach(([pid,cnt])=>{const post=D.posts.find(p=>p.id===pid);const isPref=team.prefPosts.some(pp=>pp.toLowerCase()===post?.name?.toLowerCase());if(cnt>2&&!isPref&&!isOpkuis(post||{}))repProblems.push(`${team.name}→${post?.name}: ${cnt}×`);if(cnt>maxRep)maxRep=cnt;});});
+  const repProblems=[];let maxRep=0;D.teams.forEach(team=>{Object.entries(postRep[team.id]||{}).forEach(([pid,cnt])=>{const post=D.posts.find(p=>p.id===pid);const isPref=team.prefPosts.some(pp=>pp.toLowerCase()===post?.name?.toLowerCase());if(cnt>2&&!isPref&&!isOpkuis(post||{}))repProblems.push(`${teamRef(team)}→${post?.name}: ${cnt}×`);if(cnt>maxRep)maxRep=cnt;});});
   if(repProblems.length===0)ok.push(`✅ Goede afwisseling (max ${maxRep}× per post per team)`);else warn.push({msg:`⚠️ Post-herhaling >2× (niet-voorkeur): ${repProblems.length} gevallen`,details:repProblems.slice(0,6).join(' · ')+(repProblems.length>6?` ... (+${repProblems.length-6})`:'')} );
   const counts={};D.teams.forEach(t=>{counts[t.id]={friday:0,saturday:0};});['friday','saturday'].forEach(day=>{Object.values(S[day]||{}).forEach(hp=>Object.values(hp).forEach(a=>a.forEach(tid=>{if(counts[tid])counts[tid][day]++;})));});
-  ['friday','saturday'].forEach(day=>{const vals=D.teams.map(t=>counts[t.id][day]).filter(v=>v>0);if(!vals.length)return;const mn=Math.min(...vals),mx=Math.max(...vals);const lbl=day==='friday'?'vrijdag':'zaterdag';if(mx-mn<=2)ok.push(`✅ Goede verdeling ${lbl}: min ${mn}, max ${mx} shifts`);else{const outliers=D.teams.filter(t=>counts[t.id][day]===mx||counts[t.id][day]===mn).map(t=>`${t.name}:${counts[t.id][day]}`).join(', ');warn.push({msg:`⚠️ Ongelijke verdeling ${lbl}: min ${mn}, max ${mx}`,details:outliers});}});
+  ['friday','saturday'].forEach(day=>{const vals=D.teams.map(t=>counts[t.id][day]).filter(v=>v>0);if(!vals.length)return;const mn=Math.min(...vals),mx=Math.max(...vals);const lbl=day==='friday'?'vrijdag':'zaterdag';if(mx-mn<=2)ok.push(`✅ Goede verdeling ${lbl}: min ${mn}, max ${mx} shifts`);else{const outliers=D.teams.filter(t=>counts[t.id][day]===mx||counts[t.id][day]===mn).map(t=>`${teamRef(t)}:${counts[t.id][day]}`).join(', ');warn.push({msg:`⚠️ Ongelijke verdeling ${lbl}: min ${mn}, max ${mx}`,details:outliers});}});
   return{critical:crit,warnings:warn,ok,understaffed,doubleAssign};
 }
 
@@ -948,17 +988,17 @@ function renderStats(){
   const c=shiftCountsForDay(activeDay);let teams=[...D.teams];
   if(statSort==='alpha')teams.sort((a,b)=>a.name.localeCompare(b.name));else teams.sort((a,b)=>(c[b.id]||0)-(c[a.id]||0));
   const max=Math.max(...Object.values(c),1);
-  document.getElementById('stats-grid').innerHTML=teams.map(t=>{const i=D.teams.indexOf(t);const col=TPAL[i%TPAL.length];const n=c[t.id]||0;return`<div class="stat-item"><div class="stat-top"><span class="stat-name" style="color:${col}">${t.name}</span><span class="stat-num" style="color:${col}">${n}</span></div><div class="stat-members" style="color:${col}88">${t.members}</div><div class="stat-bar"><div class="stat-fill" style="width:${(n/max*100).toFixed(1)}%;background:${col}"></div></div></div>`;}).join('');
+  document.getElementById('stats-grid').innerHTML=teams.map(t=>{const i=D.teams.indexOf(t);const col=TPAL[i%TPAL.length];const n=c[t.id]||0;return`<div class="stat-item"><div class="stat-top"><span class="stat-name" style="color:${col}">${teamRef(t)}</span><span class="stat-num" style="color:${col}">${n}</span></div><div class="stat-members" style="color:${col}88">${t.members}</div><div class="stat-bar"><div class="stat-fill" style="width:${(n/max*100).toFixed(1)}%;background:${col}"></div></div></div>`;}).join('');
 }
 
-function onFilterType(){filterType=document.getElementById('flt-type').value;const fv=document.getElementById('flt-val');if(filterType==='team'){fv.style.display='';fv.innerHTML=D.teams.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');filterVal=D.teams[0]?.id||null;}else if(filterType==='post'){fv.style.display='';fv.innerHTML=D.posts.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');filterVal=D.posts[0]?.id||null;}else{fv.style.display='none';filterVal=null;}renderSchedView();}
+function onFilterType(){filterType=document.getElementById('flt-type').value;const fv=document.getElementById('flt-val');if(filterType==='team'){fv.style.display='';fv.innerHTML=D.teams.map((t,i)=>`<option value="${t.id}">#${i+1} — ${(t.members||'').split(',').map(m=>m.trim()).filter(Boolean).join(' / ')||'team'}</option>`).join('');filterVal=D.teams[0]?.id||null;}else if(filterType==='post'){fv.style.display='';fv.innerHTML=D.posts.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');filterVal=D.posts[0]?.id||null;}else{fv.style.display='none';filterVal=null;}renderSchedView();}
 function onFilterVal(){filterVal=document.getElementById('flt-val').value;renderSchedView();}
 function renderSchedView(){const el=document.getElementById('sched-view');if(!S){el.innerHTML='<div class="empty"><h3>GEEN ROOSTER</h3></div>';return;}if(filterType==='team'&&filterVal){renderTeamDetail(el);return;}if(filterType==='post'&&filterVal){renderPostDetail(el);return;}activeView==='post'?renderGridPost(el):renderGridTeam(el);}
 
 function buildGridHeader(hours,day,rowLabel){
   const surfBg=`background:var(--surface)`;
   let h=`<thead>${ttTheadRow(hours,day)}<tr>`;
-  h+=`<th class="row-h" style="${surfBg};position:sticky;top:38px;z-index:5;border-bottom:2px solid var(--border)">${rowLabel}</th>`;
+  h+=`<th class="row-h" style="${surfBg};position:sticky;top:38px;z-index:5;border-bottom:2px solid var(--border)">${rowLabel}<span class="col1-resizer" onmousedown="startCol1Resize(event)" title="Sleep om kolombreedte aan te passen"></span></th>`;
   hours.forEach(hr=>{
     const pm=isMidnightCol(hr);
     h+=`<th class="hour-col${isPM(hr)?' midnight':''}" style="${surfBg};position:sticky;top:38px;z-index:4;${pm?'border-left:2px solid rgba(245,196,0,.6)':'border-top:2px solid var(--border-hi)'}">${fh(hr)}</th>`;
@@ -990,8 +1030,7 @@ function renderGridPost(el){
         if(s<assigned.length){const tid=assigned[s];const tm=D.teams.find(t=>t.id===tid);if(!tm)continue;const col2=tc(tid);
           h+=`<div class="chip" style="background:${col2}18;border-color:${col2}42;" draggable="true"
             ondragstart="dStart(event,'${tid}','${activeDay}',${hr},'${post.id}')" ondragend="dEnd(event)" title="${tm.members}">
-            <span class="chip-name" style="color:${col2}">${tm.name}</span>
-            <span class="chip-members" style="color:${col2}">${(tm.members||'').split(',').map(m=>m.trim()).filter(Boolean).map(m=>'<span style="display:block">'+m+'</span>').join('')||'—'}</span></div>`;
+            <span class="chip-members" style="color:${col2}">${memberLines(tm.members)}</span></div>`;
         }else h+=`<div class="empty-slot"></div>`;
       }
       h+='</div></td>';
@@ -1006,13 +1045,12 @@ function renderGridTeam(el){
   if(!hours.length){el.innerHTML='<div class="empty"><h3>GEEN SHIFTS</h3></div>';return;}
   const lk={};hours.forEach(hr=>{lk[hr]={};Object.entries(dd[hr]||{}).forEach(([pid,arr])=>arr.forEach(tid=>{lk[hr][tid]=pid;}));});
   let teams=[...D.teams].filter(t=>getAv(t,activeDay));const c=shiftCountsForDay(activeDay);
-  if(statSort==='count')teams.sort((a,b)=>(c[b.id]||0)-(c[a.id]||0));else teams.sort((a,b)=>a.name.localeCompare(b.name));
+  if(statSort==='count')teams.sort((a,b)=>(c[b.id]||0)-(c[a.id]||0));else teams.sort((a,b)=>D.teams.indexOf(a)-D.teams.indexOf(b));
   let h=`<div class="sched-wrap"><table class="sched-grid">${buildGridHeader(hours,activeDay,'TEAM')}<tbody>`;
   teams.forEach(team=>{
     const col=tc(team.id);
     h+=`<tr><td class="row-h" style="border-left:3px solid ${col}">
-      <div style="color:${col};font-family:'Barlow Condensed';font-size:11px;font-weight:800;text-transform:uppercase">${team.name}</div>
-      <div style="color:${col};font-size:11px;opacity:.8;font-family:'Barlow';text-transform:none;line-height:1.25">${(team.members||'').split(',').map(m=>m.trim()).filter(Boolean).map(m=>'<span style="display:block">'+m+'</span>').join('')}</div>
+      <div class="row-members">${memberLines(team.members)}</div>
     </td>`;
     hours.forEach(hr=>{
       const av=getAv(team,activeDay);const inRange=av&&hr>=av.from&&hr<av.to;
@@ -1035,7 +1073,7 @@ function renderGridTeam(el){
 
 function renderTeamDetail(el){
   const team=D.teams.find(t=>t.id===filterVal);if(!team)return;const col=tc(team.id);
-  let h=`<div class="card" style="border-color:${col}40"><div class="card-header"><span class="card-title" style="color:${col}">${team.name}</span><span class="badge">${team.members}</span></div><div class="two-day">`;
+  let h=`<div class="card" style="border-color:${col}40"><div class="card-header"><span class="card-title" style="color:${col}">${(team.members||'').split(',').map(m=>m.trim()).filter(Boolean).join(' · ')||teamRef(team)}</span><span class="badge">${teamRef(team)}</span></div><div class="two-day">`;
   ['friday','saturday'].forEach(day=>{
     const av=getAv(team,day);const dd=S[day]||{};const hours=Object.keys(dd).map(Number).sort((a,b)=>a-b);const breaks=team.breakPref[day]||[];
     h+=`<div class="day-card"><h4>${day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06'}</h4>`;
@@ -1072,7 +1110,7 @@ function renderPostDetail(el){
           <span style="font-size:8px;color:${need===2?'var(--gold)':'var(--text-muted)'};width:12px;flex-shrink:0">${need===2?'②':'①'}</span>
           <div style="display:flex;gap:2px;flex-wrap:wrap;flex:1">`;
         if(!arr.length){h+=`<span style="font-size:9px;color:var(--text-muted);font-style:italic">leeg</span>`;}
-        else arr.forEach(tid=>{const tm=D.teams.find(t=>t.id===tid);if(!tm)return;const tcol2=tc(tid);h+=`<span class="chip chip-sm" style="background:${tcol2}18;color:${tcol2};border:1px solid ${tcol2}38" title="${tm.members}">${tm.name}</span>`;});
+        else arr.forEach(tid=>{const tm=D.teams.find(t=>t.id===tid);if(!tm)return;const tcol2=tc(tid);h+=`<span class="chip chip-sm" style="background:${tcol2}18;color:${tcol2};border:1px solid ${tcol2}38" title="${tm.members}">${(tm.members||'').split(',').map(m=>m.trim()).filter(Boolean).join(' / ')||teamRefById(tid)}</span>`;});
         h+=`</div>${actStr}</div>`;
       }h+='</div>';}
     h+='</div>';
@@ -1086,35 +1124,35 @@ function dOver(ev){ev.preventDefault();ev.currentTarget.classList.add('drop-ok')
 function dLeave(ev){ev.currentTarget.classList.remove('drop-ok');}
 function dOverTeam(ev,tid,hr){ev.preventDefault();ev.currentTarget.classList.add('drop-ok');}
 
-function moveWarn(teamId,postId){var t=D.teams.find(function(x){return x.id===teamId;}),p=D.posts.find(function(x){return x.id===postId;});if(!t||!p)return'';var w=[];if(t.under18&&p.adults18)w.push(t.name+' (−18j) op +18j-post '+p.name);if(t.exclusivePost&&t.exclusivePost.toLowerCase()!==p.name.toLowerCase())w.push(t.name+' hoort enkel op '+t.exclusivePost);return w.join(' · ');}
+function moveWarn(teamId,postId,day,hour){var t=D.teams.find(function(x){return x.id===teamId;}),p=D.posts.find(function(x){return x.id===postId;});if(!t||!p)return'';var w=[];if(t.under18&&ageRestricted(p,day,hour))w.push(teamRefById(teamId)+' (−18j) op leeftijdsbeperkt uur '+fh(hour)+' ('+p.name+')');if(t.exclusivePost&&t.exclusivePost.toLowerCase()!==p.name.toLowerCase())w.push(teamRefById(teamId)+' hoort enkel op '+t.exclusivePost);return w.join(' · ');}
 function performMove(teamId,srcDay,srcHour,srcPost,tgtDay,tgtHour,tgtPost){
   if(srcDay===tgtDay&&srcHour===tgtHour&&srcPost===tgtPost)return null;
   const team=D.teams.find(t=>t.id===teamId);const tPost=D.posts.find(p=>p.id===tgtPost);
   const tps=tPost?.schedule[tgtDay];
   if(!tps||tgtHour<tps.from||tgtHour>=tps.to)return`"${tPost?.name}" niet actief om ${fh(tgtHour)}`;
-  if(!isAvail(team,tgtDay,tgtHour))return`${team?.name} niet beschikbaar om ${fh(tgtHour)}`;
+  if(!isAvail(team,tgtDay,tgtHour))return`${teamRefById(teamId)} niet beschikbaar om ${fh(tgtHour)}`;
   const tNeed=getNeed(tPost,tgtDay,tgtHour);
   if(!S[tgtDay][tgtHour])S[tgtDay][tgtHour]={};if(!S[tgtDay][tgtHour][tgtPost])S[tgtDay][tgtHour][tgtPost]=[];
   if(!S[srcDay][srcHour])S[srcDay][srcHour]={};if(!S[srcDay][srcHour][srcPost])S[srcDay][srcHour][srcPost]=[];
   const srcArr=[...S[srcDay][srcHour][srcPost]];const tgtArr=[...S[tgtDay][tgtHour][tgtPost]];
   if(tgtArr.includes(teamId))return null;
   const otherAtTarget=Object.entries(S[tgtDay][tgtHour]||{}).find(([pid,arr])=>{if(pid===tgtPost)return false;if(tgtDay===srcDay&&tgtHour===srcHour&&pid===srcPost)return false;return arr.includes(teamId);});
-  if(otherAtTarget){const op=D.posts.find(p=>p.id===otherAtTarget[0]);return`${team?.name} zou dan op zowel "${op?.name}" als "${tPost?.name}" staan om ${fh(tgtHour)}`;}
+  if(otherAtTarget){const op=D.posts.find(p=>p.id===otherAtTarget[0]);return`${teamRefById(teamId)} zou dan op zowel "${op?.name}" als "${tPost?.name}" staan om ${fh(tgtHour)}`;}
   let swapTeamId=null;
   if(tgtArr.length>=tNeed){
     swapTeamId=tgtArr[0];const swpTeam=D.teams.find(t=>t.id===swapTeamId);
     const swpAv=getAv(swpTeam,srcDay);
-    if(!swpAv||srcHour<swpAv.from||srcHour>=swpAv.to)return`Swap niet mogelijk: ${swpTeam?.name} niet beschikbaar om ${fh(srcHour)}`;
+    if(!swpAv||srcHour<swpAv.from||srcHour>=swpAv.to)return`Swap niet mogelijk: ${teamRefById(swapTeamId)} niet beschikbaar om ${fh(srcHour)}`;
     const swpOther=Object.entries(S[srcDay][srcHour]||{}).find(([pid,arr])=>{if(pid===srcPost)return false;if(srcDay===tgtDay&&srcHour===tgtHour&&pid===tgtPost)return false;return arr.includes(swapTeamId);});
-    if(swpOther){const op=D.posts.find(p=>p.id===swpOther[0]);return`Swap niet mogelijk: ${swpTeam?.name} staat al op "${op?.name}" om ${fh(srcHour)}`;}
+    if(swpOther){const op=D.posts.find(p=>p.id===swpOther[0]);return`Swap niet mogelijk: ${teamRefById(swapTeamId)} staat al op "${op?.name}" om ${fh(srcHour)}`;}
   }
   S[srcDay][srcHour][srcPost]=srcArr.filter(t=>t!==teamId);
   if(swapTeamId){S[tgtDay][tgtHour][tgtPost]=tgtArr.filter(t=>t!==swapTeamId);S[srcDay][srcHour][srcPost]=[...S[srcDay][srcHour][srcPost],swapTeamId];}
   if(!S[tgtDay][tgtHour][tgtPost].includes(teamId))S[tgtDay][tgtHour][tgtPost]=[...S[tgtDay][tgtHour][tgtPost],teamId];
   return null;
 }
-function dDrop(ev,day,hour,postId){ev.preventDefault();ev.currentTarget.classList.remove('drop-ok');if(!drag)return;if(!requireEdit())return;const{teamId,day:fd,hour:fhour,postId:fp}=drag;drag=null;const err=performMove(teamId,fd,fhour,fp,day,parseInt(hour),postId);if(err){toast('❌ '+err,'err');return;}renderStats();renderSchedView();renderValidation();scheduleCloudSave();var w=moveWarn(teamId,postId);if(w)toast('⚠️ '+w,'info');}
-function dDropTeam(ev,tgtTeamId,tgtHour){ev.preventDefault();ev.currentTarget.classList.remove('drop-ok');if(!drag)return;const{teamId,day:srcDay,hour:srcHour,postId:srcPost}=drag;drag=null;const th=parseInt(tgtHour);if(tgtTeamId===teamId)return;const dd=S[activeDay]||{};const tgtPost=Object.keys(dd[th]||{}).find(pid=>(dd[th][pid]||[]).includes(tgtTeamId));if(!tgtPost){toast('⚠️ Sleep naar een post-cel in \'Per Post\' weergave voor vrije vakjes','info');return;}const err=performMove(teamId,srcDay,srcHour,srcPost,activeDay,th,tgtPost);if(err){toast('❌ '+err,'err');return;}renderStats();renderSchedView();renderValidation();scheduleCloudSave();var w=moveWarn(teamId,tgtPost);if(w)toast('⚠️ '+w,'info');}
+function dDrop(ev,day,hour,postId){ev.preventDefault();ev.currentTarget.classList.remove('drop-ok');if(!drag)return;if(!requireEdit())return;const{teamId,day:fd,hour:fhour,postId:fp}=drag;drag=null;const err=performMove(teamId,fd,fhour,fp,day,parseInt(hour),postId);if(err){toast('❌ '+err,'err');return;}renderStats();renderSchedView();renderValidation();scheduleCloudSave();var w=moveWarn(teamId,postId,day,parseInt(hour));if(w)toast('⚠️ '+w,'info');}
+function dDropTeam(ev,tgtTeamId,tgtHour){ev.preventDefault();ev.currentTarget.classList.remove('drop-ok');if(!drag)return;const{teamId,day:srcDay,hour:srcHour,postId:srcPost}=drag;drag=null;const th=parseInt(tgtHour);if(tgtTeamId===teamId)return;const dd=S[activeDay]||{};const tgtPost=Object.keys(dd[th]||{}).find(pid=>(dd[th][pid]||[]).includes(tgtTeamId));if(!tgtPost){toast('⚠️ Sleep naar een post-cel in \'Per Post\' weergave voor vrije vakjes','info');return;}const err=performMove(teamId,srcDay,srcHour,srcPost,activeDay,th,tgtPost);if(err){toast('❌ '+err,'err');return;}renderStats();renderSchedView();renderValidation();scheduleCloudSave();var w=moveWarn(teamId,tgtPost,activeDay,th);if(w)toast('⚠️ '+w,'info');}
 
 function doExportXLS(){
   if(!S){toast('Geen rooster','err');return;}
@@ -1135,14 +1173,14 @@ function doExportXLS(){
       hours.forEach(hr=>{const ps=post.schedule[day];const active=ps&&hr>=ps.from&&hr<ps.to;if(!active){html+=`<td style="background:#ececec${hr===24?';border-left:2px solid '+GOLD:''}"></td>`;return;}
         const arr=dd[hr]?.[post.id]||[];const need=getNeed(post,day,hr);const miss=need-arr.length;
         const bg=need===2?'background:#fff8ee;':'';const bord=miss>0&&!isOpkuis(post)?`border:1.5px solid ${RED};`:'';const pm=hr===24?'border-left:2px solid '+GOLD+';':'';
-        const inner=arr.map(tid=>{const tm=D.teams.find(t=>t.id===tid);if(!tm)return'';const c2=tc(tid);return`<span style="color:${c2};font-weight:bold">${tm.name}</span><br><span style="color:${c2};opacity:.7;font-size:6.5pt">${tm.members}</span>`;}).join('<br>');
+        const inner=arr.map(tid=>{const tm=D.teams.find(t=>t.id===tid);if(!tm)return'';return`<span style="color:#111">${(tm.members||'').split(',').map(m=>m.trim()).filter(Boolean).join('<br>')}</span>`;}).join('<br>');
         html+=`<td style="${bg}${bord}${pm}font-size:8pt">${inner||'<span style="color:#888;font-style:italic;font-size:7pt">leeg</span>'}</td>`;});html+='</tr>';});
     html+='</tbody></table><br>';
     const lk2={};hours.forEach(hr=>{lk2[hr]={};Object.entries(dd[hr]||{}).forEach(([pid,arr])=>arr.forEach(tid=>{lk2[hr][tid]=pid;}));});
-    const teams2=[...D.teams].sort((a,b)=>a.name.localeCompare(b.name));
+    const teams2=[...D.teams];
     html+=`<h2 style="color:${RED};font-family:Calibri;margin:10px 0 4px">${lbl} — TEAM × UUR</h2><table><thead>`;
     html+=`<tr><th class="rhdr">TEAM</th>`;hours.forEach(hr=>{html+=`<th class="hhdr${hr===24?' midnight':''}">${fh(hr)}</th>`;});html+='</tr></thead><tbody>';
-    teams2.forEach(team=>{const col=tc(team.id);html+=`<tr><td class="rhdr" style="border-left:3px solid ${col};color:${col}">${team.name}<br><span style="font-size:6.5pt;opacity:.7;font-weight:normal">${team.members}</span></td>`;
+    teams2.forEach(team=>{const col=tc(team.id);html+=`<tr><td class="rhdr" style="border-left:3px solid ${col};color:#fff">${(team.members||'').split(',').map(m=>m.trim()).filter(Boolean).join('<br>')}</td>`;
       hours.forEach(hr=>{const av=getAv(team,day);const inR=av&&hr>=av.from&&hr<av.to;const isBreak=(team.breakPref[day]||[]).includes(hr);const pid=lk2[hr]?.[team.id];const pm=hr===24?'border-left:2px solid '+GOLD+';':'';
         if(!inR){html+=`<td style="background:#ececec${hr===24?';border-left:2px solid '+GOLD:''}"></td>`;return;}
         if(pid){const post=D.posts.find(p=>p.id===pid);const pcol=pc(pid);html+=`<td style="background:${pcol}18;color:${pcol};font-weight:bold;font-size:7pt;text-align:center;${pm}">${post?.name||pid}</td>`;}
@@ -1155,10 +1193,10 @@ function doExportXLS(){
     <th style="background:#1a1a1a;color:#fff">Bands vrij</th><th style="background:#1a1a1a;color:#fff">Bands zat</th>
     <th style="background:#1a1a1a;color:#fff"># Vr.</th><th style="background:#1a1a1a;color:#fff"># Za.</th>
     <th style="background:#1a1a1a;color:#fff">Totaal</th></tr></thead><tbody>`;
-  [...D.teams].sort((a,b)=>a.name.localeCompare(b.name)).forEach(t=>{
+  [...D.teams].forEach((t,ti)=>{
     let fri=0,sat=0;Object.values(S.friday||{}).forEach(hp=>Object.values(hp).forEach(a=>{if(a.includes(t.id))fri++;}));Object.values(S.saturday||{}).forEach(hp=>Object.values(hp).forEach(a=>{if(a.includes(t.id))sat++;}));
     const col=tc(t.id);
-    html+=`<tr><td style="color:${col};font-weight:bold">${t.name}</td><td style="font-size:8pt">${t.members}</td>
+    html+=`<tr><td style="color:${col};font-weight:bold">#${ti+1}</td><td style="font-size:8pt">${t.members}</td>
     <td style="color:${GOLD}">${(t.breakPref.friday||[]).map(h=>fh(h)).join(', ')||'—'}</td>
     <td style="color:${GOLD}">${(t.breakPref.saturday||[]).map(h=>fh(h)).join(', ')||'—'}</td>
     <td style="text-align:center">${fri}</td><td style="text-align:center">${sat}</td>
@@ -1181,15 +1219,15 @@ function doExportPDF(){
     hours.forEach(hr=>{t+=`<th class="${hr===24?'mh':'hh'}">${fh(hr)}</th>`;});
     t+='</tr></thead><tbody>';
     if(viewType==='post'){
-      D.posts.forEach((post,pi)=>{const col=PPAL[pi%PPAL.length];const opk=isOpkuis(post);t+=`<tr><td class="rh" style="border-left:3px solid ${col};color:${col};font-weight:700;font-size:7pt">${post.name}</td>`;
+      D.posts.forEach((post,pi)=>{const col=PPAL[pi%PPAL.length];const opk=isOpkuis(post);if(opk)return;t+=`<tr><td class="rh" style="border-left:3px solid ${col};color:${col};font-weight:700;font-size:7pt">${post.name}</td>`;
         hours.forEach(hr=>{const ps=post.schedule[day];const active=ps&&hr>=ps.from&&hr<ps.to;const pm=hr===24;if(!active){t+=`<td style="background:#f0f0f0${pm?';border-left:2px solid '+GOLD:''}"></td>`;return;}
           const arr=dd[hr]?.[post.id]||[];const need=getNeed(post,day,hr);const miss=need-arr.length;
           const bg=need===2?'background:#fffbec':'';const bord=miss>0&&!opk?`border:1.5px solid ${RED}`:'';const pmB=pm?'border-left:2px solid '+GOLD:'';
-          const inner=arr.map(tid=>{const tm=D.teams.find(t=>t.id===tid);if(!tm)return'';const c2=tc(tid);return`<div style="color:${c2};font-weight:700;font-size:6pt;line-height:1.2">${tm.name}</div><div style="color:${c2};font-size:5pt;opacity:.8">${tm.members}</div>`;}).join('');
+          const inner=arr.map(tid=>{const tm=D.teams.find(t=>t.id===tid);if(!tm)return'';return`<div style="color:#111;font-weight:600;font-size:6pt;line-height:1.3;margin-bottom:1px">${memberLines(tm.members)}</div>`;}).join('');
           t+=`<td style="${bg};${bord};${pmB}">${inner||'<span style="color:#ccc;font-size:5pt;font-style:italic">leeg</span>'}</td>`;});t+='</tr>';});
     }else{
       const lk2={};hours.forEach(hr=>{lk2[hr]={};Object.entries(dd[hr]||{}).forEach(([pid,arr])=>arr.forEach(tid=>{lk2[hr][tid]=pid;}));});
-      [...D.teams].sort((a,b)=>a.name.localeCompare(b.name)).forEach(team=>{const col=tc(team.id);t+=`<tr><td class="rh" style="border-left:3px solid ${col};color:${col}"><div style="font-weight:700;font-size:7pt">${team.name}</div><div style="font-size:5.5pt;opacity:.7">${team.members}</div></td>`;
+      [...D.teams].forEach(team=>{const col=tc(team.id);t+=`<tr><td class="rh" style="border-left:3px solid ${col};background:#fff;color:#111"><div style="font-weight:600;font-size:6.5pt;line-height:1.3;color:#111">${memberLines(team.members)}</div></td>`;
         hours.forEach(hr=>{const av=getAv(team,day);const inR=av&&hr>=av.from&&hr<av.to;const isBreak=(team.breakPref[day]||[]).includes(hr);const pid=lk2[hr]?.[team.id];const pm=hr===24?'border-left:2px solid '+GOLD:'';
           if(!inR){t+=`<td style="background:#f0f0f0;${pm}"></td>`;return;}
           if(pid){const post=D.posts.find(p=>p.id===pid);const pcol=pc(pid);t+=`<td style="background:${pcol}20;color:${pcol};font-weight:700;font-size:6.5pt;text-align:center;${pm}">${post?.name||pid}</td>`;}
@@ -1303,14 +1341,14 @@ function getNeed(post,day,hr){var n=post.needPerHour&&post.needPerHour[day]?post
 function actsForHour(hr,day){return(D.timetable[day]||[]).filter(function(a){var f=a.fromH+a.fromMin/60,t=a.toH+a.toMin/60;return f<hr+1&&t>hr;});}
 function switchDay(d){activeDay=d;document.getElementById('dt-fri').classList.toggle('active',d==='friday');document.getElementById('dt-sat').classList.toggle('active',d==='saturday');renderView();}
 function switchView(v){activeView=v;document.getElementById('vt-post').classList.toggle('active',v==='post');document.getElementById('vt-team').classList.toggle('active',v==='team');renderView();}
-function onFilterType(){filterType=document.getElementById('flt-type').value;var fv=document.getElementById('flt-val');if(filterType==='team'){fv.style.display='';fv.innerHTML=D.teams.map(function(t){return'<option value="'+t.id+'">'+t.name+'</option>';}).join('');filterVal=D.teams[0]?D.teams[0].id:null;}else if(filterType==='post'){fv.style.display='';fv.innerHTML=D.posts.map(function(p){return'<option value="'+p.id+'">'+p.name+'</option>';}).join('');filterVal=D.posts[0]?D.posts[0].id:null;}else{fv.style.display='none';filterVal=null;}renderView();}
+function onFilterType(){filterType=document.getElementById('flt-type').value;var fv=document.getElementById('flt-val');if(filterType==='team'){fv.style.display='';fv.innerHTML=D.teams.map(function(t,i){return'<option value="'+t.id+'">#'+(i+1)+' — '+((t.members||'').split(',').map(function(m){return m.trim();}).filter(Boolean).join(' / ')||'team')+'</option>';}).join('');filterVal=D.teams[0]?D.teams[0].id:null;}else if(filterType==='post'){fv.style.display='';fv.innerHTML=D.posts.map(function(p){return'<option value="'+p.id+'">'+p.name+'</option>';}).join('');filterVal=D.posts[0]?D.posts[0].id:null;}else{fv.style.display='none';filterVal=null;}renderView();}
 function onFilterVal(){filterVal=document.getElementById('flt-val').value;renderView();}
 function renderView(){if(filterType==='team'&&filterVal){renderTeamDetail();}else if(filterType==='post'&&filterVal){renderPostDetail();}else if(activeView==='post'){renderGridPost();}else{renderGridTeam();}}
 function buildGH(hours,label){var h='<thead><tr><th class="row-h" style="position:sticky;top:0;left:0;z-index:5">'+label+'</th>';hours.forEach(function(hr){h+='<th style="'+(hr===24?'border-left:2px solid rgba(245,196,0,.5);color:var(--gold)':'')+'">'+(isPM(hr)?'<span style="color:var(--gold)">':'')+fh(hr)+(isPM(hr)?'</span>':'')+'</th>';});return h+'</tr></thead>';}
-function renderGridPost(){var dd=S[activeDay]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var el=document.getElementById('sched-view');if(!hours.length){el.innerHTML='<p style="padding:40px;color:var(--text-dim)">Geen shifts</p>';return;}var h='<div class="sched-wrap"><table class="sched-grid">'+buildGH(hours,'POST')+'<tbody>';D.posts.forEach(function(post,pi){if(!post.schedule[activeDay])return;var col=PPAL[pi%PPAL.length];var opk=isOpkuis(post);h+='<tr><td class="row-h" style="border-left:3px solid '+col+(opk?';background:rgba(245,196,0,.06)':'')+'">'+'<div style="color:'+col+';font-family:Barlow Condensed;font-size:11px;font-weight:800;text-transform:uppercase">'+post.name+'</div>'+(opk?'<div style="font-size:8px;color:var(--gold);font-weight:700">ALLE TEAMS</div>':'')+'</td>';hours.forEach(function(hr){var ps=post.schedule[activeDay];var active=ps&&hr>=ps.from&&hr<ps.to;var pm=hr===24;if(!active){h+='<td class="inactive" style="'+(pm?'border-left:2px solid rgba(245,196,0,.3)':'')+'"></td>';return;}var assigned=(dd[hr]&&dd[hr][post.id])?dd[hr][post.id]:[];var need=getNeed(post,activeDay,hr);h+='<td style="background:'+(need===2?'rgba(200,16,30,.04)':opk?'rgba(245,196,0,.03)':'transparent')+(pm?';border-left:2px solid rgba(245,196,0,.3)':'')+'">'+'<div class="cell-content">';for(var s=0;s<(opk?assigned.length:need);s++){if(s<assigned.length){var tid=assigned[s];var tm=D.teams.find(function(t){return t.id===tid;});if(!tm)continue;var c2=tc(tid);h+='<div class="chip" style="background:'+c2+'18;border-color:'+c2+'42"><span class="chip-name" style="color:'+c2+'">'+tm.name+'</span><span class="chip-members" style="color:'+c2+'">'+(tm.members||'').split(',').map(function(m){return m.trim();}).filter(Boolean).map(function(m){return '<span style="display:block">'+m+'</span>';}).join('')+'</span></div>';}else h+='<div class="empty-slot"></div>';}h+='</div></td>';});h+='</tr>';});h+='</tbody></table></div>';el.innerHTML=h;}
-function renderGridTeam(){var dd=S[activeDay]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var el=document.getElementById('sched-view');if(!hours.length){el.innerHTML='<p style="padding:40px;color:var(--text-dim)">Geen shifts</p>';return;}var lk={};hours.forEach(function(hr){lk[hr]={};Object.entries(dd[hr]||{}).forEach(function(e){e[1].forEach(function(tid){lk[hr][tid]=e[0];});});});var teams=[].concat(D.teams).filter(function(t){return getAv(t,activeDay);}).sort(function(a,b){return a.name.localeCompare(b.name);});var h='<div class="sched-wrap"><table class="sched-grid">'+buildGH(hours,'TEAM')+'<tbody>';teams.forEach(function(team){var col=tc(team.id);h+='<tr><td class="row-h" style="border-left:3px solid '+col+'"><div style="color:'+col+';font-weight:800;font-size:11px;text-transform:uppercase">'+team.name+'</div><div style="color:'+col+';font-size:11px;opacity:.8;line-height:1.25">'+(team.members||'').split(',').map(function(m){return m.trim();}).filter(Boolean).map(function(m){return '<span style="display:block">'+m+'</span>';}).join('')+'</div></td>';hours.forEach(function(hr){var av=getAv(team,activeDay);var inR=av&&hr>=av.from&&hr<av.to;var isBreak=(team.breakPref[activeDay]||[]).indexOf(hr)>=0;var pid=lk[hr]?lk[hr][team.id]:null;var pm=hr===24?';border-left:2px solid rgba(245,196,0,.3)':'';if(!inR){h+='<td class="inactive" style="'+(hr===24?'border-left:2px solid rgba(245,196,0,.3)':'')+'"></td>';return;}if(pid){var post=D.posts.find(function(p){return p.id===pid;});var pcol=pc(pid);h+='<td style="background:'+pcol+'0d'+pm+'"><div class="chip chip-sm" style="background:'+pcol+'1a;color:'+pcol+';border:1px solid '+pcol+'38;overflow:hidden;text-overflow:ellipsis;max-width:76px">'+(post?post.name:pid)+'</div></td>';}else{h+='<td style="'+pm+'"><span style="font-size:7px;color:var(--text-muted)">—</span></td>';}});h+='</tr>';});h+='</tbody></table></div>';el.innerHTML=h;}
-function renderTeamDetail(){var team=D.teams.find(function(t){return t.id===filterVal;});if(!team)return;var col=tc(team.id);var el=document.getElementById('sched-view');var h='<div class="card" style="border-color:'+col+'40"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-family:Anton;font-size:11px;letter-spacing:2px;color:'+col+';text-transform:uppercase">'+team.name+'</span><span class="badge">'+team.members+'</span></div><div class="two-day">';['friday','saturday'].forEach(function(day){var av=getAv(team,day);var dd=S[day]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var breaks=team.breakPref[day]||[];h+='<div class="day-card"><h4>'+(day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06')+'</h4>';if(!av){h+='<p style="color:var(--text-muted);font-size:11px">Niet aanwezig</p>';}else{var shifts=0;var pmShown=false;h+='<div style="display:flex;flex-direction:column;gap:2px">';hours.forEach(function(hr){if(hr<av.from||hr>=av.to)return;if(isPM(hr)&&!pmShown){pmShown=true;h+='<div style="font-size:8px;color:var(--gold);padding:2px 7px;font-weight:700">⬥ MIDDERNACHT</div>';}var pid=Object.keys(dd[hr]||{}).find(function(p){return(dd[hr][p]||[]).indexOf(team.id)>=0;});var acts2=actsForHour(hr,day);var actLabel=acts2.length?'<span style="color:var(--red);font-size:8px;margin-left:auto">🎵 '+acts2[0].name+'</span>':'';if(pid){var post=D.posts.find(function(p){return p.id===pid;});var pcol=pc(pid);shifts++;h+='<div class="tl-row working" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">'+fh(hr)+'</span><span class="tl-dot" style="background:'+pcol+'"></span><span>'+(post?post.name:pid)+'</span></div>'+actLabel+'</div>';}else{h+='<div class="tl-row free" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">'+fh(hr)+'</span><span style="color:var(--text-muted);font-size:9px">— vrij/bands</span></div>'+actLabel+'</div>';}});h+='</div><p style="margin-top:8px;font-size:11px;font-weight:600"><strong style="color:'+col+'">'+shifts+' SHIFT'+(shifts!==1?'S':'')+'</strong></p>';}h+='</div>';});h+='</div></div>';el.innerHTML=h;}
-function renderPostDetail(){var post=D.posts.find(function(p){return p.id===filterVal;});if(!post)return;var col=pc(filterVal);var el=document.getElementById('sched-view');var h='<div class="card" style="border-color:'+col+'40"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-family:Anton;font-size:11px;letter-spacing:2px;color:'+col+';text-transform:uppercase">'+post.name+'</span><span class="badge">variabel teams/uur</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">';['friday','saturday'].forEach(function(day){var ps=post.schedule[day];var dd=S[day]||{};h+='<div class="day-card"><h4>'+(day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06')+'</h4>';if(!ps){h+='<p style="color:var(--text-muted);font-size:11px">Post niet actief</p>';}else{h+='<div style="display:flex;flex-direction:column;gap:2px">';var pmShown=false;for(var hr=ps.from;hr<ps.to;hr++){if(isPM(hr)&&!pmShown){pmShown=true;h+='<div style="font-size:8px;color:var(--gold);padding:2px 7px;font-weight:700">⬥ MIDDERNACHT</div>';}var arr=(dd[hr]&&dd[hr][post.id])?dd[hr][post.id]:[];var need=getNeed(post,day,hr);var miss=need-arr.length;var acts2=actsForHour(hr,day);var actStr=acts2.length?'<span style="color:var(--red);font-size:8px;margin-left:auto">🎵 '+acts2[0].name+'</span>':'';h+='<div style="display:flex;align-items:center;gap:5px;padding:3px 7px;background:var(--bg);border-radius:3px;border:1px solid '+(miss>0&&!isOpkuis(post)?'var(--red)':'var(--border)')+'"><span style="font-family:JetBrains Mono;font-size:9px;color:'+(isPM(hr)?'var(--gold)':'var(--text-dim)')+';width:38px;flex-shrink:0">'+fh(hr)+'</span><span style="font-size:8px;color:'+(need===2?'var(--gold)':'var(--text-muted)')+';width:12px;flex-shrink:0">'+(need===2?'②':'①')+'</span><div style="display:flex;gap:2px;flex-wrap:wrap;flex:1">';if(!arr.length){h+='<span style="font-size:9px;color:var(--text-muted);font-style:italic">leeg</span>';}else{arr.forEach(function(tid){var tm=D.teams.find(function(t){return t.id===tid;});if(!tm)return;var tcol2=TPAL[D.teams.indexOf(tm)%TPAL.length];h+='<span class="chip chip-sm" style="background:'+tcol2+'18;color:'+tcol2+';border:1px solid '+tcol2+'38">'+tm.name+'</span>';});}h+='</div>'+actStr+'</div>';}h+='</div>';}h+='</div>';});h+='</div></div>';el.innerHTML=h;}
+function renderGridPost(){var dd=S[activeDay]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var el=document.getElementById('sched-view');if(!hours.length){el.innerHTML='<p style="padding:40px;color:var(--text-dim)">Geen shifts</p>';return;}var h='<div class="sched-wrap"><table class="sched-grid">'+buildGH(hours,'POST')+'<tbody>';D.posts.forEach(function(post,pi){if(!post.schedule[activeDay])return;var col=PPAL[pi%PPAL.length];var opk=isOpkuis(post);h+='<tr><td class="row-h" style="border-left:3px solid '+col+(opk?';background:rgba(245,196,0,.06)':'')+'">'+'<div style="color:'+col+';font-family:Barlow Condensed;font-size:11px;font-weight:800;text-transform:uppercase">'+post.name+'</div>'+(opk?'<div style="font-size:8px;color:var(--gold);font-weight:700">ALLE TEAMS</div>':'')+'</td>';hours.forEach(function(hr){var ps=post.schedule[activeDay];var active=ps&&hr>=ps.from&&hr<ps.to;var pm=hr===24;if(!active){h+='<td class="inactive" style="'+(pm?'border-left:2px solid rgba(245,196,0,.3)':'')+'"></td>';return;}var assigned=(dd[hr]&&dd[hr][post.id])?dd[hr][post.id]:[];var need=getNeed(post,activeDay,hr);h+='<td style="background:'+(need===2?'rgba(200,16,30,.04)':opk?'rgba(245,196,0,.03)':'transparent')+(pm?';border-left:2px solid rgba(245,196,0,.3)':'')+'">'+'<div class="cell-content">';for(var s=0;s<(opk?assigned.length:need);s++){if(s<assigned.length){var tid=assigned[s];var tm=D.teams.find(function(t){return t.id===tid;});if(!tm)continue;var c2=tc(tid);h+='<div class="chip" style="background:'+c2+'18;border-color:'+c2+'42"><span class="chip-members" style="color:'+c2+';font-size:12px">'+(tm.members||'').split(',').map(function(m){return m.trim();}).filter(Boolean).map(function(m){return '<span style="display:block">'+m+'</span>';}).join('')+'</span></div>';}else h+='<div class="empty-slot"></div>';}h+='</div></td>';});h+='</tr>';});h+='</tbody></table></div>';el.innerHTML=h;}
+function renderGridTeam(){var dd=S[activeDay]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var el=document.getElementById('sched-view');if(!hours.length){el.innerHTML='<p style="padding:40px;color:var(--text-dim)">Geen shifts</p>';return;}var lk={};hours.forEach(function(hr){lk[hr]={};Object.entries(dd[hr]||{}).forEach(function(e){e[1].forEach(function(tid){lk[hr][tid]=e[0];});});});var teams=[].concat(D.teams).filter(function(t){return getAv(t,activeDay);});var h='<div class="sched-wrap"><table class="sched-grid">'+buildGH(hours,'TEAM')+'<tbody>';teams.forEach(function(team){var col=tc(team.id);h+='<tr><td class="row-h" style="border-left:3px solid '+col+'"><div style="color:var(--text);font-weight:600;font-size:13px;line-height:1.3;font-family:Barlow,sans-serif">'+(team.members||'').split(',').map(function(m){return m.trim();}).filter(Boolean).map(function(m){return '<span style="display:block">'+m+'</span>';}).join('')+'</div></td>';hours.forEach(function(hr){var av=getAv(team,activeDay);var inR=av&&hr>=av.from&&hr<av.to;var isBreak=(team.breakPref[activeDay]||[]).indexOf(hr)>=0;var pid=lk[hr]?lk[hr][team.id]:null;var pm=hr===24?';border-left:2px solid rgba(245,196,0,.3)':'';if(!inR){h+='<td class="inactive" style="'+(hr===24?'border-left:2px solid rgba(245,196,0,.3)':'')+'"></td>';return;}if(pid){var post=D.posts.find(function(p){return p.id===pid;});var pcol=pc(pid);h+='<td style="background:'+pcol+'0d'+pm+'"><div class="chip chip-sm" style="background:'+pcol+'1a;color:'+pcol+';border:1px solid '+pcol+'38;overflow:hidden;text-overflow:ellipsis;max-width:76px">'+(post?post.name:pid)+'</div></td>';}else{h+='<td style="'+pm+'"><span style="font-size:7px;color:var(--text-muted)">—</span></td>';}});h+='</tr>';});h+='</tbody></table></div>';el.innerHTML=h;}
+function renderTeamDetail(){var team=D.teams.find(function(t){return t.id===filterVal;});if(!team)return;var col=tc(team.id);var el=document.getElementById('sched-view');var _mem=(team.members||'').split(',').map(function(m){return m.trim();}).filter(Boolean).join(' · ')||'team';var h='<div class="card" style="border-color:'+col+'40"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-family:Barlow;font-weight:700;font-size:15px;color:var(--text)">'+_mem+'</span></div><div class="two-day">';['friday','saturday'].forEach(function(day){var av=getAv(team,day);var dd=S[day]||{};var hours=Object.keys(dd).map(Number).sort(function(a,b){return a-b;});var breaks=team.breakPref[day]||[];h+='<div class="day-card"><h4>'+(day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06')+'</h4>';if(!av){h+='<p style="color:var(--text-muted);font-size:11px">Niet aanwezig</p>';}else{var shifts=0;var pmShown=false;h+='<div style="display:flex;flex-direction:column;gap:2px">';hours.forEach(function(hr){if(hr<av.from||hr>=av.to)return;if(isPM(hr)&&!pmShown){pmShown=true;h+='<div style="font-size:8px;color:var(--gold);padding:2px 7px;font-weight:700">⬥ MIDDERNACHT</div>';}var pid=Object.keys(dd[hr]||{}).find(function(p){return(dd[hr][p]||[]).indexOf(team.id)>=0;});var acts2=actsForHour(hr,day);var actLabel=acts2.length?'<span style="color:var(--red);font-size:8px;margin-left:auto">🎵 '+acts2[0].name+'</span>':'';if(pid){var post=D.posts.find(function(p){return p.id===pid;});var pcol=pc(pid);shifts++;h+='<div class="tl-row working" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">'+fh(hr)+'</span><span class="tl-dot" style="background:'+pcol+'"></span><span>'+(post?post.name:pid)+'</span></div>'+actLabel+'</div>';}else{h+='<div class="tl-row free" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:7px"><span class="tl-hour">'+fh(hr)+'</span><span style="color:var(--text-muted);font-size:9px">— vrij/bands</span></div>'+actLabel+'</div>';}});h+='</div><p style="margin-top:8px;font-size:11px;font-weight:600"><strong style="color:'+col+'">'+shifts+' SHIFT'+(shifts!==1?'S':'')+'</strong></p>';}h+='</div>';});h+='</div></div>';el.innerHTML=h;}
+function renderPostDetail(){var post=D.posts.find(function(p){return p.id===filterVal;});if(!post)return;var col=pc(filterVal);var el=document.getElementById('sched-view');var h='<div class="card" style="border-color:'+col+'40"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-family:Anton;font-size:11px;letter-spacing:2px;color:'+col+';text-transform:uppercase">'+post.name+'</span><span class="badge">variabel teams/uur</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">';['friday','saturday'].forEach(function(day){var ps=post.schedule[day];var dd=S[day]||{};h+='<div class="day-card"><h4>'+(day==='friday'?'VRIJDAG 26/06':'ZATERDAG 27/06')+'</h4>';if(!ps){h+='<p style="color:var(--text-muted);font-size:11px">Post niet actief</p>';}else{h+='<div style="display:flex;flex-direction:column;gap:2px">';var pmShown=false;for(var hr=ps.from;hr<ps.to;hr++){if(isPM(hr)&&!pmShown){pmShown=true;h+='<div style="font-size:8px;color:var(--gold);padding:2px 7px;font-weight:700">⬥ MIDDERNACHT</div>';}var arr=(dd[hr]&&dd[hr][post.id])?dd[hr][post.id]:[];var need=getNeed(post,day,hr);var miss=need-arr.length;var acts2=actsForHour(hr,day);var actStr=acts2.length?'<span style="color:var(--red);font-size:8px;margin-left:auto">🎵 '+acts2[0].name+'</span>':'';h+='<div style="display:flex;align-items:center;gap:5px;padding:3px 7px;background:var(--bg);border-radius:3px;border:1px solid '+(miss>0&&!isOpkuis(post)?'var(--red)':'var(--border)')+'"><span style="font-family:JetBrains Mono;font-size:9px;color:'+(isPM(hr)?'var(--gold)':'var(--text-dim)')+';width:38px;flex-shrink:0">'+fh(hr)+'</span><span style="font-size:8px;color:'+(need===2?'var(--gold)':'var(--text-muted)')+';width:12px;flex-shrink:0">'+(need===2?'②':'①')+'</span><div style="display:flex;gap:2px;flex-wrap:wrap;flex:1">';if(!arr.length){h+='<span style="font-size:9px;color:var(--text-muted);font-style:italic">leeg</span>';}else{arr.forEach(function(tid){var tm=D.teams.find(function(t){return t.id===tid;});if(!tm)return;var tcol2=TPAL[D.teams.indexOf(tm)%TPAL.length];h+='<span class="chip chip-sm" style="background:'+tcol2+'18;color:'+tcol2+';border:1px solid '+tcol2+'38">'+((tm.members||'').split(',').map(function(m){return m.trim();}).filter(Boolean).join(' / ')||'team')+'</span>';});}h+='</div>'+actStr+'</div>';}h+='</div>';}h+='</div>';});h+='</div></div>';el.innerHTML=h;}
 document.getElementById('hdr-controls').innerHTML='<div class="pill-tabs"><button class="pill-tab active" onclick="switchDay(\'friday\')" id="dt-fri">Vrijdag</button><button class="pill-tab" onclick="switchDay(\'saturday\')" id="dt-sat">Zaterdag</button></div>'+'<div class="pill-tabs"><button class="pill-tab active" onclick="switchView(\'post\')" id="vt-post">Per Post</button><button class="pill-tab" onclick="switchView(\'team\')" id="vt-team">Per Team</button></div>'+'<div style="display:flex;align-items:center;gap:5px"><span style="font-size:10px;color:var(--text-dim);font-family:Barlow Condensed;text-transform:uppercase">Filter:</span><select class="filter-select" id="flt-type" onchange="onFilterType()"><option value="all">Alles</option><option value="team">Team</option><option value="post">Post</option></select><select class="filter-select" id="flt-val" style="display:none" onchange="onFilterVal()"></select></div>';
 var ts=new Date(DATA.ts);document.getElementById('ts-info').textContent='Gepubliceerd '+ts.toLocaleDateString('nl-BE')+' '+ts.toLocaleTimeString('nl-BE');
 renderView();
@@ -1321,6 +1359,9 @@ function toast(msg,type='ok'){const t=document.getElementById('toast');t.textCon
 
 (async function init(){
   buildAuthControls();
+  try{var _st=localStorage.getItem('gr_theme');if(_st==='light')darkMode=false;if(_st==='dark')darkMode=true;}catch(e){}
+  document.body.classList.toggle('light',!darkMode);var _tb=document.getElementById('theme-btn');if(_tb)_tb.textContent=darkMode?'🌙':'☀️';
+  applyCol1Width();
   if(sb){
     sb.auth.onAuthStateChange((_e,session)=>{ loggedIn=!!session; userEmail=session?session.user.email:''; refreshEdit(); });
     try{ const {data:{session}}=await sb.auth.getSession(); loggedIn=!!session; userEmail=session?session.user.email:''; }catch(e){}
