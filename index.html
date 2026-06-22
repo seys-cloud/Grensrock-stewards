@@ -361,7 +361,7 @@ body.light .pg-light{display:inline-block;}
     <div class="card-header"><span class="card-title">Posten</span><span class="badge" id="cnt-posts">0</span></div>
     <div style="overflow-x:auto">
       <table class="data-table">
-        <thead><tr><th>#</th><th>Post</th><th>Vrijdag</th><th>Zaterdag</th><th style="color:var(--gold)">Teams/Uur Vrijdag</th><th style="color:var(--gold)">Teams/Uur Zaterdag</th><th>Leeftijd</th><th></th></tr></thead>
+        <thead><tr><th>#</th><th>Post</th><th>Vrijdag</th><th>Zaterdag</th><th style="color:var(--gold)">Teams/Uur Vrijdag</th><th style="color:var(--gold)">Teams/Uur Zaterdag</th><th>Leeftijdsbegrenzing</th><th></th></tr></thead>
         <tbody id="tbody-posts"></tbody>
       </table>
     </div>
@@ -572,6 +572,11 @@ const fm=(h,m)=>{const n=((h%24)+24)%24;return String(n).padStart(2,'0')+':'+Str
 const isPM=h=>h>=24;
 const isMidnightCol=h=>h===24;
 const isOpkuis=p=>p.name.toLowerCase().includes('opkuis');
+/* Posten vanwaar je de bands toch kan zien: 'bands voorkeur' blokkeert hier NIET */
+const BAND_VIEW_POSTS=['frontstage','nooduitgang links','nooduitgang rechts','festivalterrein'];
+const isBandViewPost=p=>BAND_VIEW_POSTS.indexOf((p&&p.name||'').trim().toLowerCase())>=0;
+/* Zachte bonus als een team naast zijn collega-voorkeur op dezelfde post komt (geen harde koppeling) */
+const COLLEAGUE_BONUS=60;
 
 function resolveHour(val,day,type){
   if(val==='begin'){const hrs=D.posts.flatMap(p=>p.schedule[day]?[p.schedule[day].from]:[]);return hrs.length?Math.min(...hrs):0;}
@@ -691,7 +696,16 @@ function needStrFromObj(nph){if(!nph||!Object.keys(nph).length)return'';const hr
 function parseAgeStr(str,av){const out={};if(!av)return out;const ch={};if(str&&String(str).trim()){String(str).split(',').forEach(p=>{const m=p.trim().match(/^(\d+)\s*:\s*(ja|nee|j|n|true|false|1|0)$/i);if(m){const v=/^(ja|j|true|1)$/i.test(m[2]);ch[parseInt(m[1])]=v;}});}const keys=Object.keys(ch).map(Number).sort((a,b)=>a-b);let cur=false;for(let h=av.from;h<av.to;h++){for(const k of keys){if(k<=h)cur=ch[k];}out[h]=cur;}return out;}
 function ageStrFromObj(obj){if(!obj||!Object.keys(obj).length)return'';const hrs=Object.keys(obj).map(Number).sort((a,b)=>a-b);const segs=[];let cur=obj[hrs[0]],st=hrs[0];for(let i=1;i<hrs.length;i++){if(obj[hrs[i]]!==cur){segs.push(`${st}:${cur?'ja':'nee'}`);cur=obj[hrs[i]];st=hrs[i];}}segs.push(`${st}:${cur?'ja':'nee'}`);return segs.join(',');}
 function ageRestricted(post,day,hr){const aph=post.adultsPerHour&&post.adultsPerHour[day];if(aph&&Object.keys(aph).length)return !!aph[hr];return !!post.adults18;}
-function ageSummaryShort(post){const parts=[];['friday','saturday'].forEach(day=>{const aph=post.adultsPerHour&&post.adultsPerHour[day];let lbl='';if(aph&&Object.keys(aph).length){const hrs=Object.keys(aph).map(Number).sort((a,b)=>a-b).filter(h=>aph[h]);if(hrs.length)lbl='+18 v.a. '+fh(hrs[0]);}else if(post.adults18){lbl='+18 ganse dag';}if(lbl)parts.push((day==='friday'?'Vr ':'Za ')+lbl);});return parts.length?'<span style="color:var(--gold);font-weight:700">'+parts.join(' · ')+'</span>':'<span style="color:var(--text-muted)">—</span>';}
+function ageSummaryShort(post){const parts=[];['friday','saturday'].forEach(day=>{const aph=post.adultsPerHour&&post.adultsPerHour[day];const lab=day==='friday'?'Vr ':'Za ';
+  if(!aph||!Object.keys(aph).length){if(post.adults18)parts.push(lab+'<span style="color:var(--gold);font-weight:700">+18 ganse dag</span>');return;}
+  const hrs=Object.keys(aph).map(Number).sort((a,b)=>a-b);
+  if(!hrs.some(h=>aph[h]))return;                                  /* niets ingevuld / geen enkele beperking */
+  const segs=[];let cur=aph[hrs[0]],stt=hrs[0];
+  for(let i=1;i<hrs.length;i++){if(aph[hrs[i]]!==cur){segs.push({from:stt,to:hrs[i-1],r:cur});cur=aph[hrs[i]];stt=hrs[i];}}
+  segs.push({from:stt,to:hrs[hrs.length-1],r:cur});
+  const txt=segs.map(s=>`<span style="color:${s.r?'var(--gold)':'var(--text-dim)'}">${fh(s.from)}-${fh(s.to+1)}: ${s.r?'+18':'vrij'}</span>`).join(' · ');
+  parts.push(lab+txt);
+});return parts.length?parts.join('<br>'):'<span style="color:var(--text-muted)">—</span>';}
 /* Teamlabel = nummer uit eerste kolom (geen team-namen meer) */
 function teamRef(team){if(!team)return'?';const i=D.teams.indexOf(team);return '#'+(i>=0?i+1:'?');}
 function teamRefById(id){const i=D.teams.findIndex(t=>t.id===id);return '#'+(i>=0?i+1:'?');}
@@ -955,9 +969,18 @@ function buildSchedule(){
         const need=getNeed(post,day,hour);
         if(isOpkuis(post)){const all=D.teams.filter(t=>!usedH.has(t.id)&&isAvail(t,day,hour)&&!(t.under18&&ageRestricted(post,day,hour))).map(t=>t.id);sched[day][hour][post.id]=all;all.forEach(tid=>{usedH.add(tid);st[tid].tot++;st[tid].dayShifts[day]++;st[tid].postCounts[post.id]=(st[tid].postCounts[post.id]||0)+1;});return;}
         const cands=D.teams.filter(t=>!usedH.has(t.id)).map(t=>({t,sc:scoreT(t,post,hour,day,st)})).filter(x=>x.sc>-9000).sort((a,b)=>b.sc-a.sc);
-        const assigned=[];
-        if(need>=2&&cands.length>=2){let found=false;for(let i=0;i<cands.length&&!found;i++){const bi=cands.findIndex((x,xi)=>xi!==i&&(cands[i].t.prefColleagues||[]).indexOf(x.t.id)>=0);if(bi!==-1){assigned.push(cands[i].t.id,cands[bi].t.id);found=true;}}if(!found)for(const c of cands){if(assigned.length>=need)break;if(!assigned.includes(c.t.id))assigned.push(c.t.id);}
-        }else for(const c of cands){if(assigned.length>=need)break;assigned.push(c.t.id);}
+        const assigned=[];const pool=cands.slice();
+        /* Greedy per slot: beste score wint; collega-voorkeur geeft enkel een zachte bonus, geen harde koppeling */
+        while(assigned.length<need&&pool.length){
+          let bi=0,best=-Infinity;
+          for(let i=0;i<pool.length;i++){
+            let sc=pool[i].sc;
+            const pairs=assigned.some(aid=>{const at=D.teams.find(z=>z.id===aid);return (pool[i].t.prefColleagues||[]).indexOf(aid)>=0||(at&&(at.prefColleagues||[]).indexOf(pool[i].t.id)>=0);});
+            if(pairs)sc+=COLLEAGUE_BONUS;
+            if(sc>best){best=sc;bi=i;}
+          }
+          assigned.push(pool[bi].t.id);pool.splice(bi,1);
+        }
         sched[day][hour][post.id]=assigned;
         assigned.forEach(tid=>{usedH.add(tid);const s=st[tid];s.tot++;s.dayShifts[day]++;s.postCounts[post.id]=(s.postCounts[post.id]||0)+1;s.consec[day]=(s.lastH[day]===hour-1)?s.consec[day]+1:1;s.lastH[day]=hour;s.consecFree[day]=0;});
       });
@@ -977,7 +1000,7 @@ function scoreT(team,post,hour,day,st){
     return 100000+(Math.random()-.5);                              /* prio-team op eigen post */
   }
   let score=100;
-  if((team.breakPref[day]||[]).includes(hour))score-=250;         /* bands = zachte voorkeur, geen harde uitsluiting */
+  if((team.breakPref[day]||[]).includes(hour)&&!isBandViewPost(post))score-=250;  /* bands = zachte voorkeur; band-zicht-posten uitgezonderd */
   const avH=availHours(team,day)||1;score-=(s.dayShifts[day]/avH)*130;  /* relatieve eerlijkheid: gelijk aandeel gewerkt/beschikbaar */
   const cnt=s.postCounts[post.id]||0;const isPref=team.prefPosts.some(pp=>pp.toLowerCase()===post.name.toLowerCase());
   if(isPref){score+=40;score-=cnt*7;}else{if(cnt===0)score+=5;else if(cnt===1)score-=65;else if(cnt===2)score-=150;else if(cnt===3)score-=270;else score-=420;}
